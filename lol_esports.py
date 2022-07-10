@@ -169,7 +169,8 @@ class League:
             self.undo_match(match)
 
             seq += 1
-            print(cur_case / full_case * 100, end='\r')
+            # print('{:.2f}%'.format(cur_case / full_case * 100), end='\r')
+            print(f'{cur_case / full_case * 100:.6f}% ({cur_case} / {full_case})', end='\r')
             while seq < 4:
                 match = rest_matches[i]
                 self.set_match(match, seq)

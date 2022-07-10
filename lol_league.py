@@ -135,7 +135,7 @@ def main():
     # simulate rest matches
     standings = league.simulate()
 
-    init_league_simulation(sheet)
+    # init_league_simulation(sheet)
 
     for team, standing in standings.items():
         print('{0}: {1} / {2}'.format(team, sum(standing), standing))
