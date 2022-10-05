@@ -131,3 +131,6 @@ dmypy.json
 # credentials and token
 credentials.json
 token.json
+
+csv
+.vscode/settings.json
