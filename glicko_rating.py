@@ -34,7 +34,7 @@ class Team:
         self.win = 0
         self.loss = 0
         self.r = 1000
-        self.r = self.leagues_r[league]
+        # self.r = self.leagues_r[league]
         self.RD = 350
 
     @classmethod
@@ -128,7 +128,7 @@ class Team:
         """Make Team class to dictionary
 
         Returns:
-            dict: Dictionary of Team class instance
+            dict: Dictionary of Team instance
         """
         data = {
             'League': self.league,
@@ -177,7 +177,7 @@ def get_team_name(same_team_names, name):
         name (str): Name of the team
 
     Returns:
-        str: Latest name of team
+        str: Latest name of the team
     """
     while name in same_team_names:
         name = same_team_names[name]
@@ -232,8 +232,6 @@ def main():
             by=['Year', 'DateStart', 'Date']
         ).reset_index(drop=True)
 
-        for team in teams.values():
-            team.init_rd()
         for page in tournaments['OverviewPage']:
             print(f'{page} rating ...')
             scoreboard_games = get_scoreboard_games(f'T.OverviewPage="{page}"')
@@ -264,6 +262,9 @@ def main():
                 print(f'There are {len(new_teams)} new teams')
                 print(sorted(list(new_teams.keys()), key=lambda x: x[0].lower()))
             print()
+
+            for team in teams.values():
+                team.init_rd()
             proceed_rating(teams, scoreboard_games)
     rating = get_rating(teams)
 
