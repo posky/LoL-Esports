@@ -1,18 +1,17 @@
+"""LoLesports glicko rating"""
+
 import math
 
 import pandas as pd
-import numpy as np
-import mwclient
 
 from google_sheet import Sheet
 
-from lol_fandom import SITE
-from lol_fandom import get_leagues, get_tournaments
-from lol_fandom import get_scoreboard_games, get_scoreboard_players
-from lol_fandom import from_response
+from lol_fandom import get_tournaments
+from lol_fandom import get_scoreboard_games
 
 
 class Team:
+    """Team information"""
     q = math.log(10) / 400
     leagues_r = {
         'LCK': 1000,
@@ -38,20 +37,58 @@ class Team:
         self.r = self.leagues_r[league]
         self.RD = 350
 
-    def get_g(RDi):
-        return 1 / math.sqrt(1 + (3 * Team.q ** 2 * RDi ** 2) / math.pi ** 2)
+    @classmethod
+    def get_g(cls, RDi):
+        """Compute g(RDi)
 
-    def get_e(r0, ri, g):
+        Args:
+            RDi (float): Ratings Deviation (RD)
+
+        Returns:
+            float: g(RDi)
+        """
+        return 1 / math.sqrt(1 + (3 * cls.q ** 2 * RDi ** 2) / math.pi ** 2)
+
+    @classmethod
+    def get_e(cls, r0, ri, g):
+        """Compute E(s|r0, ri, RDi)
+
+        Args:
+            r0 (float): previous rating
+            ri (float): rating of opponent
+            g (float): g(RDi)
+
+        Returns:
+            float: E(s | r0, ri, RDi)
+        """
         return 1 / (1 + 10 ** ((g * (r0 - ri)) / -400))
 
-    def get_d(g, e):
-        return 1 / (Team.q ** 2 * g ** 2 * e * (1 - e))
+    @classmethod
+    def get_d(cls, g, e):
+        """Compute d^2
+
+        Args:
+            g (float): g(RDi)
+            e (float): E(s | r0, ri, RDi)
+
+        Returns:
+            float: d^2
+        """
+        return 1 / (cls.q ** 2 * g ** 2 * e * (1 - e))
 
     def init_rd(self):
+        """Initialize RD"""
         self.RD = 350
 
-    def update_point(team1, team2, result):
-        # team1 win - result = 1 team1 loss - result = 0
+    @classmethod
+    def update_point(cls, team1, team2, result):
+        """Update ratings of team1 and team2
+
+        Args:
+            team1 (Team): Team1
+            team2 (Team): Team2
+            result (int): 1 is Team1 win, 0 is Team2 win
+        """
         assert isinstance(team1, Team)
         assert isinstance(team2, Team)
 
@@ -77,9 +114,22 @@ class Team:
         self.RD = math.sqrt((1 / self.RD ** 2 + 1 / d_2) ** -1)
 
     def get_win_prob(self, opponent):
+        """Get win probability
+
+        Args:
+            opponent (Team): Opponent team
+
+        Returns:
+            float: Win probability
+        """
         return Team.get_e(self.r, opponent.r, Team.get_g(opponent.RD))
 
     def to_dict(self):
+        """Make Team class to dictionary
+
+        Returns:
+            dict: Dictionary of Team class instance
+        """
         data = {
             'League': self.league,
             'Win': self.win,
@@ -92,12 +142,26 @@ class Team:
         return data
 
 def proceed_rating(teams, games):
+    """Proceed rating with teams and games
+
+    Args:
+        teams (list): List of Team instances
+        games (DataFrame): Scoreboard games
+    """
     for row in games.itertuples():
         team1, team2 = row.Team1, row.Team2
         result = 1 if row.WinTeam == team1 else 0
         Team.update_point(teams[team1], teams[team2], result)
 
 def get_rating(teams):
+    """Get rating of teams
+
+    Args:
+        teams (list): List of Team instances
+
+    Returns:
+        DataFrame: Rating of teams
+    """
     ratings = pd.DataFrame(
         data=map(lambda x: x.to_dict(), teams.values()),
         index=teams.keys()
@@ -106,12 +170,21 @@ def get_rating(teams):
     return ratings
 
 def get_team_name(same_team_names, name):
+    """Get latest name of the team
+
+    Args:
+        same_team_names (dict): Dictionary of names of same teams
+        name (str): Name of the team
+
+    Returns:
+        str: Latest name of team
+    """
     while name in same_team_names:
         name = same_team_names[name]
     return name
 
 pd.set_option('display.max_columns', None)
-with open('./sheet_id.txt', 'r') as f:
+with open('./sheet_id.txt', 'r', encoding='utf8') as f:
     SHEET_ID = f.read()
 TARGET_LEAGUES = [
     'LCK', 'LPL', 'LEC', 'LCS', 'MSI', 'WCS',
@@ -145,6 +218,7 @@ SAME_TEAM_NAMES = {
 
 
 def main():
+    """Glicko rating system"""
     sheet = Sheet(SHEET_ID)
     sheet.connect_sheet()
 
@@ -154,7 +228,9 @@ def main():
         for league in TARGET_LEAGUES:
             t = get_tournaments(f'L.League_Short="{league}" and T.Year={year}')
             tournaments = pd.concat([tournaments, t])
-        tournaments = tournaments.sort_values(by=['Year', 'DateStart', 'Date']).reset_index(drop=True)
+        tournaments = tournaments.sort_values(
+            by=['Year', 'DateStart', 'Date']
+        ).reset_index(drop=True)
 
         for team in teams.values():
             team.init_rd()
@@ -165,7 +241,9 @@ def main():
                 print(f'{page} is None\n')
                 continue
             print(f'{scoreboard_games.shape[0]} games')
-            scoreboard_games = scoreboard_games.sort_values(by='DateTime UTC').reset_index(drop=True)
+            scoreboard_games = scoreboard_games.sort_values(
+                by='DateTime UTC'
+            ).reset_index(drop=True)
 
             team_names = scoreboard_games[['Team1', 'Team2']].apply(pd.unique)
             team_names = list(set(list(team_names['Team1']) + list(team_names['Team2'])))
