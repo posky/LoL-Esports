@@ -361,6 +361,80 @@ def get_player_champions_comp_stats(
 
     return comps
 
+def get_player_by_champions_vs_stats(games, players):
+    """Get statistics of player by champions vs opponent champions
+
+    Args:
+        games (DataFrame): Scoreboard of games
+        players (DataFrame): Scoreboard of players
+
+    Returns:
+        DataFrame: Statistics of player by champions vs opponent champions
+    """
+    merged = pd.merge(players, games, how='left', on='GameId')
+    grouped = merged.groupby(['GameId', 'IngameRole'])
+
+    data = {}
+    for df in grouped:
+        df = df[1]
+        rows = [df.iloc[0], df.iloc[1]]
+        idx = [
+            (
+                rows[0]['Team'], rows[0]['Name'],
+                rows[0]['Champion'], rows[1]['Champion']
+            ),
+            (
+                rows[1]['Team'], rows[1]['Name'],
+                rows[1]['Champion'], rows[0]['Champion']
+            )
+        ]
+        for i in idx:
+            if i not in data:
+                data[i] = {
+                    'Win': 0,
+                    'Loss': 0,
+                    'Kills': 0,
+                    'Deaths': 0,
+                    'Assists': 0,
+                    'CS': 0,
+                    'Gold': 0,
+                    'VisionScore': 0,
+                    'DamageToChampions': 0,
+                    'Gamelength Number': 0
+                }
+        for i, row in zip(idx, rows):
+            result = 'Win' if row['PlayerWin'] == 'Yes' else 'Loss'
+            data[i][result] += 1
+            data[i]['Kills'] += row['Kills']
+            data[i]['Deaths'] += row['Deaths']
+            data[i]['Assists'] += row['Assists']
+            data[i]['CS'] += row['CS']
+            data[i]['Gold'] += row['Gold']
+            data[i]['VisionScore'] += row['VisionScore']
+            data[i]['DamageToChampions'] += row['DamageToChampions']
+            data[i]['Gamelength Number'] += row['Gamelength Number']
+    stats = pd.DataFrame(data=data.values(), index=data.keys())
+    stats['Games'] = stats[['Win', 'Loss']].sum(axis=1)
+    stats['WinRate'] = stats['Win'] / stats['Games']
+    columns = [
+        'Kills', 'Deaths', 'Assists', 'CS', 'Gold',
+        'VisionScore', 'Gamelength Number'
+    ]
+    for col in columns:
+        stats[col] = stats[col] / stats['Gamelength Number']
+    stats['KDA'] = stats[['Kills', 'Assists']].sum(axis=1) / stats['Deaths']
+    stats['CSPM'] = stats['CS'] / stats['Gamelength Number']
+    stats['GPM'] = stats['Gold'] / stats['Gamelength Number']
+    stats['DPM'] = stats['DamageToChampions'] / stats['Gamelength Number']
+    columns = [
+        'Games', 'Win', 'Loss', 'WinRate', 'Kills', 'Deaths', 'Assists',
+        'KDA', 'DPM', 'CS', 'CSPM', 'Gold', 'GPM', 'VisionScore'
+    ]
+    stats = stats[columns]
+
+    stats.index = stats.index.set_names(['Team', 'Player', 'Champion', 'Opponent'])
+
+    return stats
 
 
 def main():
@@ -449,6 +523,16 @@ def main():
     )
     sheet.update_sheet(f'{"_".join(positions)}_player_stats', player_comps_stats)
     print(f'Updated {" ".join(positions)} stats on sheet')
+
+    print('Get player by champions vs stats ...')
+    player_champions_vs_stats = get_player_by_champions_vs_stats(
+        scoreboard_games, scoreboard_players
+    )
+    player_champions_vs_stats = player_champions_vs_stats.sort_values(
+        by=['Team', 'Player']
+    )
+    sheet.update_sheet('player_by_champions_vs', player_champions_vs_stats)
+    print('Updated player by champions vs stats on sheet')
 
 
     _, ax = plt.subplots(1, 1, figsize=(15, 15))
