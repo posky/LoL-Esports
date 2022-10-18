@@ -223,7 +223,8 @@ def main():
     sheet.connect_sheet()
 
     teams = {}
-    for year in range(2021, 2023):
+    # for year in range(2021, 2023):
+    for year in range(2022, 2023):
         tournaments = pd.DataFrame()
         for league in TARGET_LEAGUES:
             t = get_tournaments(f'L.League_Short="{league}" and T.Year={year}')
@@ -277,7 +278,8 @@ def main():
         'CTBC Flying Oyster', 'GAM Esports'
     ]
 
-    rating = rating.loc[team_names].sort_values(by='r', ascending=False)
+    # rating = rating.loc[team_names].sort_values(by='r', ascending=False)
+    rating = rating.sort_values(by='r', ascending=False)
     rating.index = rating.index.set_names('Team')
     sheet.update_sheet('glicko_rating', rating)
 
