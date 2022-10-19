@@ -7,3 +7,5 @@ LoL Esports Elo Rating (glicko rating)
 LoL Esports Team Stats
 
 LoL Esports Various Stats
+
+LoL Esports Predict Win Tournament Probability
