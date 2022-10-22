@@ -32,7 +32,7 @@ class Team:
         self.win = 0
         self.loss = 0
         self.point = 1000
-        self.point = self.leagues_r[league]
+        # self.point = self.leagues_r[league]
         self.points = [self.point]
 
     @classmethod
