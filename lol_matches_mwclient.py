@@ -17,6 +17,24 @@ with open('./sheet_id.txt', 'r', encoding='utf8') as f:
     SHEET_ID = f.read()
 
 
+def get_scoreboard_players_by_games(overview, games):
+    """Get scoreboard of players with scoreboard of games
+
+    Args:
+        overview (str): OverviewPage of tournament
+        games (DataFrame): Scoreboard of games
+
+    Returns:
+        DataFrame: Scoreboard of players with scoreboard of games
+    """
+    players = pd.DataFrame()
+    for id in games['GameId']:
+        temp = get_scoreboard_players(
+            f'T.OverviewPage="{overview}" and SP.GameId="{id}"'
+        )
+        players = pd.concat([players, temp])
+    return players.reset_index(drop=True)
+
 def get_champions_stats(games, players):
     """Get statistics of champions
 
@@ -170,8 +188,10 @@ def get_champions_comp_stats(
         result = 'Win' if df.iloc[0]['PlayerWin'] == 'Yes' else 'Loss'
         data[idx][result] += 1
         data[idx]['By'].append(by)
-    for idx in data.keys():
-        data[idx]['By'] = len(set(data[idx]['By']))
+    # for idx in data.keys():
+    #     data[idx]['By'] = len(set(data[idx]['By']))
+    for key, value in data.items():
+        data[key]['By'] = len(set(value['By']))
     comps = pd.DataFrame(data=data.values(), index=data.keys())
     comps['Games'] = comps[['Win', 'Loss']].sum(axis=1)
     comps['WinRate'] = comps['Win'] / comps['Games']
@@ -214,8 +234,10 @@ def get_champions_vs_stats(games, players, champs=None):
             result = 'Win' if champ['PlayerWin'] == 'Yes' else 'Loss'
             data[i][result] += 1
             data[i]['As'].append(champ['IngameRole'])
-    for key in data.keys():
-        data[key]['As'] = list(set(data[key]['As']))
+    # for key in data.keys():
+    #     data[key]['As'] = list(set(data[key]['As']))
+    for key, value in data.items():
+        data[key]['As'] = list(set(value['As']))
     vs_stats = pd.DataFrame(data=data.values(), index=data.keys())
     vs_stats['Games'] = vs_stats[['Win', 'Loss']].sum(axis=1)
     vs_stats['WinRate'] = vs_stats['Win'] / vs_stats['Games']
@@ -287,12 +309,23 @@ def get_teams_stats(games):
     """
     games['Team1Win'] = games['Winner'].transform(lambda x: x == 1)
     games['Team2Win'] = games['Winner'].transform(lambda x: x == 2)
+    games['Team1WinDuration'] = games['Team1Win'] * games['Gamelength Number']
+    games['Team2WinDuration'] = games['Team2Win'] * games['Gamelength Number']
+    games['Team1LossDuration'] = games['Team2Win'] * games['Gamelength Number']
+    games['Team2LossDuration'] = games['Team1Win'] * games['Gamelength Number']
     games['GPM1'] = games['Team1Gold'] / games['Gamelength Number']
     games['GPM2'] = games['Team2Gold'] / games['Gamelength Number']
+    games['GDPM1'] = (games['Team1Gold'] - games['Team2Gold']) / \
+        games['Gamelength Number']
+    games['GDPM2'] = (games['Team2Gold'] - games['Team1Gold']) / \
+        games['Gamelength Number']
     games['KPM1'] = games['Team1Kills'] / games['Gamelength Number']
     games['KPM2'] = games['Team2Kills'] / games['Gamelength Number']
-    games['GDPM1'] = (games['Team1Gold'] - games['Team2Gold']) / games['Gamelength Number']
-    games['GDPM2'] = (games['Team2Gold'] - games['Team1Gold']) / games['Gamelength Number']
+    games['KDPM1'] = (games['Team1Kills'] - games['Team2Kills']) / \
+        games['Gamelength Number']
+    games['KDPM2'] = (games['Team2Kills'] - games['Team1Kills']) / \
+        games['Gamelength Number']
+
     grouped1 = games.groupby('Team1')
     grouped2 = games.groupby('Team2')
 
@@ -305,12 +338,32 @@ def get_teams_stats(games):
     teams['WinRate'] = teams['Win'] / teams['Games']
     teams['GameDuration'] = (grouped1['Gamelength Number'].sum() +
         grouped2['Gamelength Number'].sum()) / teams['Games']
+    teams['WinGameDuration'] = \
+        (grouped1['Team1WinDuration'].sum() +
+        grouped2['Team2WinDuration'].sum()) / teams['Win']
+    teams['LossGameDuration'] = \
+        (grouped1['Team2WinDuration'].sum() +
+        grouped2['Team1WinDuration'].sum()) / teams['Loss']
+    teams['Kills'] = \
+        (grouped1['Team1Kills'].sum() + grouped2['Team2Kills'].sum()) / \
+        teams['Games']
+    teams['Deaths'] = \
+        (grouped1['Team2Kills'].sum() + grouped2['Team1Kills'].sum()) / \
+        teams['Games']
     teams['GPM'] = (grouped1['GPM1'].sum() + grouped2['GPM2'].sum()) / teams['Games']
     teams['GDPM'] = (grouped1['GDPM1'].sum() + grouped2['GDPM2'].sum()) / teams['Games']
     teams['KPM'] = (grouped1['KPM1'].sum() + grouped2['KPM2'].sum()) / teams['Games']
+    teams['KDPM'] = (grouped1['KDPM1'].sum() + grouped2['KDPM2'].sum()) / teams['Games']
+
     teams['Outlier'] = teams['KPM'] * teams['GDPM']
 
-    return teams
+    columns = [
+        'Games', 'Win', 'Loss', 'WinRate', 'GameDuration',
+        'WinGameDuration', 'LossGameDuration', 'Kills', 'Deaths',
+        'GPM', 'GDPM', 'KPM', 'KDPM', 'Outlier'
+    ]
+
+    return teams[columns]
 
 def get_player_champions_comp_stats(
     games, players, _comps=('Top', 'Jungle', 'Mid', 'Bot', 'Support')):
@@ -421,7 +474,7 @@ def get_player_by_champions_vs_stats(games, players):
         'VisionScore', 'Gamelength Number'
     ]
     for col in columns:
-        stats[col] = stats[col] / stats['Gamelength Number']
+        stats[col] = stats[col] / stats['Games']
     stats['KDA'] = stats[['Kills', 'Assists']].sum(axis=1) / stats['Deaths']
     stats['CSPM'] = stats['CS'] / stats['Gamelength Number']
     stats['GPM'] = stats['Gold'] / stats['Gamelength Number']
@@ -462,8 +515,8 @@ def main():
     print(f'{len(scoreboard_games)} scoreboard games')
 
     print('Get scoreboard players ...')
-    scoreboard_players = get_scoreboard_players(
-        f'T.OverviewPage="{tournaments["OverviewPage"][1]}"'
+    scoreboard_players = get_scoreboard_players_by_games(
+        tournaments['OverviewPage'][1], scoreboard_games
     )
     print(f'{len(scoreboard_players)} scoreboard players')
 
