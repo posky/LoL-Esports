@@ -111,6 +111,7 @@ def get_players_stats(games, _players):
         DataFrame: Statistics of players
     """
     merged = pd.merge(_players, games, how='left', on='GameId')
+    merged['DPG'] = merged['DamageToChampions'] / merged['Gold']
     grouped = merged.groupby('Name')
 
     players = pd.DataFrame(index=_players['Name'].unique())
@@ -131,6 +132,7 @@ def get_players_stats(games, _players):
     players['GoldShare'] = players['Gold'] / grouped['TeamGold'].mean()
     players['DPM'] = \
         grouped['DamageToChampions'].sum() / grouped['Gamelength Number'].sum()
+    players['DPG'] = grouped['DPG'].mean()
     players['ChampionsPlayed'] = grouped['Champion'].nunique()
     champs = grouped['Champion'].value_counts(sort=True, ascending=False)
     keys = players.index
@@ -141,7 +143,7 @@ def get_players_stats(games, _players):
 
     columns = [
         'Team', 'Games', 'Win', 'Loss', 'WinRate', 'Kills', 'Deaths', 'Assists',
-        'KDA', 'DPM', 'CS', 'CSPM', 'Gold', 'GPM', 'VisionScore',
+        'KDA', 'DPM', 'DPG', 'CS', 'CSPM', 'Gold', 'GPM', 'VisionScore',
         'KP', 'KillShare', 'GoldShare', 'ChampionsPlayed', 'Champs'
     ]
     players = players[columns]
@@ -264,6 +266,7 @@ def get_player_by_champions_stats(games, players):
         DataFrame: Statistics of player by champions
     """
     merged = pd.merge(players, games, how='left', on='GameId')
+    merged['DPG'] = merged['Gold'] / merged['DamageToChampions']
     grouped = merged.groupby(['Name', 'Champion'])
 
     players_by = pd.DataFrame()
@@ -288,10 +291,11 @@ def get_player_by_champions_stats(games, players):
     players_by['GoldShare'] = players_by['Gold'] / grouped['TeamGold'].mean()
     players_by['DPM'] = \
         grouped['DamageToChampions'].sum() / grouped['Gamelength Number'].sum()
+    players_by['DPG'] = grouped['DPG'].mean()
 
     columns = [
         'Team', 'Games', 'Win', 'Loss', 'WinRate', 'Kills', 'Deaths', 'Assists',
-        'KDA', 'DPM', 'CS', 'CSPM', 'Gold', 'GPM', 'VisionScore',
+        'KDA', 'DPM', 'DPG', 'CS', 'CSPM', 'Gold', 'GPM', 'VisionScore',
         'KP', 'KillShare', 'GoldShare'
     ]
     players_by = players_by[columns]
