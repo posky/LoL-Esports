@@ -233,9 +233,6 @@ def main():
             by=['Year', 'DateStart', 'Date']
         ).reset_index(drop=True)
 
-        for team in teams.values():
-                team.init_rd()
-
         for page in tournaments['OverviewPage']:
             print(f'{page} rating ...')
             scoreboard_games = get_scoreboard_games(f'T.OverviewPage="{page}"')
@@ -266,6 +263,9 @@ def main():
                 print(f'There are {len(new_teams)} new teams')
                 print(sorted(list(new_teams.keys()), key=lambda x: x[0].lower()))
             print()
+
+            for team in teams.values():
+                team.init_rd()
 
             proceed_rating(teams, scoreboard_games)
     rating = get_rating(teams)
