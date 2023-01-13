@@ -29,8 +29,9 @@ def get_tournaments(where=''):
         where=where
     )
     df = from_response(response)
-    df['DateStart'] = pd.to_datetime(df['DateStart'])
-    df['Date'] = pd.to_datetime(df['Date'])
+    if len(df) > 0:
+        df['DateStart'] = pd.to_datetime(df['DateStart'])
+        df['Date'] = pd.to_datetime(df['Date'])
     return df
 
 def get_scoreboard_games(where='', casting=True):
