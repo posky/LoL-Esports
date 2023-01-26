@@ -1,13 +1,33 @@
+import time
+
 import pandas as pd
 import numpy as np
 import mwclient
 
 SITE = mwclient.Site('lol.fandom.com', path='/')
+DEFAULT_DELAY = 1
+last_query = time.time()
+
+
+def set_default_delay(delay):
+    global DEFAULT_DELAY
+
+    DEFAULT_DELAY = delay
+
+def delay_between_query():
+    global last_query
+
+    delay = DEFAULT_DELAY - (time.time() - last_query)
+    if delay > 0:
+        time.sleep(delay)
+    last_query = time.time()
 
 def from_response(response):
     return pd.DataFrame([l['title'] for l in response['cargoquery']])
 
 def get_leagues(where=''):
+    delay_between_query()
+
     response = SITE.api(
         'cargoquery',
         limit='max',
@@ -18,6 +38,8 @@ def get_leagues(where=''):
     return from_response(response)
 
 def get_tournaments(where=''):
+    delay_between_query()
+
     response = SITE.api(
         'cargoquery',
         limit='max',
@@ -35,6 +57,8 @@ def get_tournaments(where=''):
     return df
 
 def get_scoreboard_games(where='', casting=True):
+    delay_between_query()
+
     response = SITE.api(
         'cargoquery',
         limit='max',
@@ -73,7 +97,9 @@ def get_scoreboard_games(where='', casting=True):
         df[float_types] = df[float_types].astype('float')
     return df
 
-def get_scoreboard_players(where=''):
+def get_scoreboard_players(where='', casting=True):
+    delay_between_query()
+
     response = SITE.api(
         'cargoquery',
         limit='max',
@@ -92,12 +118,21 @@ def get_scoreboard_players(where=''):
     )
 
     int_types = [
-        'Kills', 'Deaths', 'Assists', 'Gold', 'CS', 'DamageToChampions',
-        'VisionScore', 'TeamKills', 'TeamGold', 'Role Number', 'Side',
+        'Kills', 'Deaths', 'Assists'
+    ]
+    float_types = [
+        'Gold', 'CS', 'DamageToChampions', 'VisionScore',
+        'TeamKills', 'TeamGold', 'Role Number', 'Side'
     ]
     datetime_type = 'DateTime UTC'
 
     df = from_response(response)
-    df[int_types] = df[int_types].astype('int')
-    df[datetime_type] = pd.to_datetime(df[datetime_type])
+    if len(df) == 0 or df['OverviewPage'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan)
+    if casting:
+        df[datetime_type] = pd.to_datetime(df[datetime_type])
+        df[int_types] = df[int_types].astype('int')
+        df[float_types] = df[float_types].astype('float')
     return df
