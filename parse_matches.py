@@ -7,6 +7,7 @@ import numpy as np
 from lol_fandom import SITE, set_default_delay
 from lol_fandom import get_leagues, get_tournaments
 from lol_fandom import get_scoreboard_games, get_scoreboard_players
+from lol_fandom import get_tournament_rosters
 from lol_fandom import from_response
 
 pd.set_option('display.max_columns', None)
@@ -14,6 +15,7 @@ pd.set_option('display.max_columns', None)
 
 
 def parse_tournaments(start=2011, end=datetime.datetime.now().year):
+    print('=========== Tournaments ===========')
     leagues = get_leagues(where=f'L.Level="Primary" and L.IsOfficial="Yes"')
     for year in range(start, end + 1):
         print(f'{year} tournaments')
@@ -30,6 +32,7 @@ def parse_tournaments(start=2011, end=datetime.datetime.now().year):
         print(f'{year} tournaments - {tournaments.shape}')
 
 def parse_scoreboard_games(start=2011, end=datetime.datetime.now().year):
+    print('=========== Scoreboard Games ===========')
     leagues = get_leagues(where=f'L.Level="Primary" and L.IsOfficial="Yes"')
     for year in range(start, end + 1):
         tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
@@ -62,6 +65,7 @@ def parse_scoreboard_games(start=2011, end=datetime.datetime.now().year):
         print(f'{year} tournaments {tournaments.shape}')
 
 def parse_scoreboard_players(start=2011, end=datetime.datetime.now().year):
+    print('=========== Scoreboard Players ===========')
     for year in range(start, end + 1):
         tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
         scoreboard_games = pd.read_csv(f'./csv/scoreboard_games/{year}_scoreboard_games.csv')
@@ -91,10 +95,28 @@ def parse_scoreboard_players(start=2011, end=datetime.datetime.now().year):
             index=False
         )
         print(f'{year} scoreboard_players {scoreboard_players.shape}')
+
+def parse_tournament_rosters(start=2011, end=datetime.datetime.now().year):
+    print('=========== Tournament Rosters ===========')
+    for year in range(start, end + 1):
+        tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
+        print(f'{year} - tournament {tournaments.shape}')
+        tournament_rosters = pd.DataFrame()
+        for page in tournaments['OverviewPage']:
+            tr = get_tournament_rosters(where=f'T.OverviewPage="{page}"')
+            print(f'\t{page} - {tr.shape[0]}')
+            tournament_rosters = pd.concat([tournament_rosters, tr], ignore_index=True)
+        tournament_rosters.to_csv(
+            f'./csv/tournament_rosters/{year}_tournament_rosters.csv',
+            index=False
+        )
+        print(f'{year} tournament rosters {tournament_rosters.shape}')
+
 def main():
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
+    parse_tournament_rosters(start=2023)
 
 
 if __name__ == '__main__':
