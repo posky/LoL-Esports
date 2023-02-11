@@ -90,7 +90,7 @@ def get_scoreboard_games(where='', casting=True):
     if df['OverviewPage'].iloc[0] is None:
         return None
 
-    df.replace([None], np.nan)
+    df.replace([None], np.nan, inplace=True)
     if casting:
         df[datetime_type] = pd.to_datetime(df[datetime_type])
         df[int_types] = df[int_types].astype('int')
@@ -130,9 +130,30 @@ def get_scoreboard_players(where='', casting=True):
     if len(df) == 0 or df['OverviewPage'].iloc[0] is None:
         return None
 
-    df.replace([None], np.nan)
+    df.replace([None], np.nan, inplace=True)
     if casting:
         df[datetime_type] = pd.to_datetime(df[datetime_type])
         df[int_types] = df[int_types].astype('int')
         df[float_types] = df[float_types].astype('float')
+    return df
+
+def get_tournament_rosters(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='Tournaments=T, TournamentRosters=TR',
+        join_on='T.OverviewPage=TR.OverviewPage',
+        fields='TR.Team, TR.OverviewPage, TR.Region, TR.RosterLinks, ' +
+            'TR.Roles, TR.Flags, TR.Footnotes, TR.IsUsed, TR.Tournament, ' +
+            'TR.Short, TR.IsComplete, TR.PageAndTeam, TR.UniqueLine',
+        where=where
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['OverviewPage'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
     return df
