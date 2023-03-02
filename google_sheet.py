@@ -75,7 +75,9 @@ class Sheet:
         except HttpError as err:
             print(err)
 
-    def update_sheet(self, sheet_name, df, index=True, value_input_option='USER_ENTERED'):
+    def update_sheet(
+        self, sheet_name, df, index=True, value_input_option='USER_ENTERED'
+        ):
         if index:
             values = [list(df.index.names) + df.columns.tolist()]
             if len(df.index.names) > 1:
