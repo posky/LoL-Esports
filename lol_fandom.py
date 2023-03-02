@@ -157,3 +157,43 @@ def get_tournament_rosters(where=''):
 
     df.replace([None], np.nan, inplace=True)
     return df
+
+def get_player_redirects(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='PlayerRedirects=PR',
+        fields='PR.AllName, PR.OverviewPage, PR.ID',
+        where=where,
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['OverviewPage'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
+    return df
+
+def get_teams(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='Teams=T',
+        fields='T.Name, T.OverviewPage, T.Short, T.Location, T.TeamLocation, ' +
+            'T.Region, T.OrganizationPage, T.Image, T.Twitter, T.Youtube, ' +
+            'T.Facebook, T.Instagram, T.Discord, T.Snapchat, T.Vk, ' +
+            'T.Subreddit, T.Website, T.RosterPhoto, T.IsDisbanded, ' +
+            'T.RenamedTo, T.IsLowercase',
+        where=where,
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['OverviewPage'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
+    return df
