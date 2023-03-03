@@ -7,11 +7,13 @@ import numpy as np
 from lol_fandom import SITE, set_default_delay
 from lol_fandom import get_leagues, get_tournaments
 from lol_fandom import get_scoreboard_games, get_scoreboard_players
-from lol_fandom import get_tournament_rosters
-from lol_fandom import from_response
+from lol_fandom import get_tournament_rosters, get_match_schedule
 
 pd.set_option('display.max_columns', None)
 # set_default_delay(0.5)
+
+def change_to_tuple(lst):
+    return '(' + ', '.join(map(lambda x: f'"{x}"', lst)) + ')'
 
 
 def parse_tournaments(start=2011, end=datetime.datetime.now().year):
@@ -112,11 +114,30 @@ def parse_tournament_rosters(start=2011, end=datetime.datetime.now().year):
         )
         print(f'{year} tournament rosters {tournament_rosters.shape}')
 
+def parse_matches_schedule(start=2011, end=datetime.datetime.now().year):
+    print('=========== Matches Schedule ===========')
+    for year in range(start, end + 1):
+        scoreboard_games = pd.read_csv(f'./csv/scoreboard_games/{year}_scoreboard_games.csv')
+        print(f'{year} - scoreboard games {scoreboard_games.shape}')
+        matches_schedule = pd.DataFrame()
+        for page in scoreboard_games['OverviewPage'].unique():
+            ids = scoreboard_games.loc[scoreboard_games['OverviewPage'] == page, 'MatchId'].unique()
+            ms = get_match_schedule(where=f'MS.MatchId in {change_to_tuple(ids)}')
+            if ms is not None:
+                print(f'\t{page} - {ms.shape[0]}')
+                matches_schedule = pd.concat([matches_schedule, ms], ignore_index=True)
+        matches_schedule.to_csv(
+            f'./csv/match_schedule/{year}_match_schedule.csv', index=False
+        )
+        print(f'{year} match schedule {matches_schedule.shape}')
+
+
 def main():
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
     parse_tournament_rosters(start=2023)
+    parse_matches_schedule(start=2023)
 
 
 if __name__ == '__main__':
