@@ -197,3 +197,82 @@ def get_teams(where=''):
 
     df.replace([None], np.nan, inplace=True)
     return df
+
+def get_tournament_results(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='TournamentResults=TR',
+        fields='TR.Event, TR.Tier, TR.Date, TR.RosterPage, TR.Place, ' +
+            'TR.ForceNewPlace, TR.Place_Number, TR.Qualified, TR.Prize, ' +
+            'TR.Prize_USD, TR.Prize_Euro, TR.PrizeUnit, TR.Prize_Markup, ' +
+            'TR.PrizeOther, TR.Phase, TR.Team, TR.IsAchievement, ' +
+            'TR.LastResult, TR.LastTeam, TR.LastOpponent_Markup, ' +
+            'TR.GroupName, TR.LastOutcome, TR.PageAndTeam, '
+            'TR.OverviewPage, TR.UniqueLine',
+        where=where,
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['Team'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
+    return df
+
+def get_team_redirects(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='TeamRedirects=TR',
+        fields='TR.AllName, TR.OtherName, TR.UniqueLine',
+        where=where,
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['AllName'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
+    return df
+
+def get_match_schedule(where=''):
+    delay_between_query()
+
+    response = SITE.api(
+        'cargoquery',
+        limit='max',
+        tables='MatchSchedule=MS',
+        fields='MS.Team1, MS.Team2, MS.Team1Final, MS.Team2Final, MS.Winner, ' +
+            'MS.Team1Points, MS.Team2Points, MS.Team1PointsTB, ' +
+            'MS.Team2PointsTB, MS.Team1Score, MS.Team2Score, ' +
+            'MS.Team1Poster, MS.Team2Poster, MS.Team1Advantage, ' +
+            'MS.Team2Advantage, MS.FF, MS.IsNullified, MS.Player1, ' +
+            'MS.Player2, MS.MatchDay, MS.DateTime_UTC, MS.HasTime, ' +
+            'MS.DST, MS.IsFlexibleStart, MS.IsReschedulable, ' +
+            'MS.OverrideAllowPredictions, MS.OverrideDisallowPredictions, ' +
+            'MS.IsTiebreaker, MS.OverviewPage, MS.ShownName, MS.ShownRound, ' +
+            'MS.BestOf, MS.Round, MS.Phase, MS.N_MatchInPage, MS.Tab, ' +
+            'MS.N_MatchInTab, MS.N_TabInPage, MS.N_Page, MS.Patch, ' +
+            'MS.PatchPage, MS.Hotfix, MS.DisabledChampions, ' +
+            'MS.PatchFootnote, MS.InitialN_MatchInTab, MS.InitialPageAndTab, ' +
+            'MS.GroupName, MS.Stream, MS.StreamDisplay, MS.Venue, ' +
+            'MS.CastersPBP, MS.CastersColor, MS.Casters, MS.MVP, ' +
+            'MS.MVPPoints, MS.VodInterview, MS.VodHighlights, ' +
+            'MS.InterviewWith, MS.Recap, MS.Reddit, MS.QQ, MS.Wanplus, ' +
+            'MS.WanplusId, MS.PageAndTeam1, MS.PageAndTeam2, ' +
+            'MS.Team1Footnote, MS.Team2Footnote, MS.Footnote, ' +
+            'MS.UniqueMatch, MS.MatchId',
+        where=where,
+    )
+
+    df = from_response(response)
+    if len(df) == 0 or df['Team1'].iloc[0] is None:
+        return None
+
+    df.replace([None], np.nan, inplace=True)
+    return df
