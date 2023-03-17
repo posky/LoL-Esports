@@ -1,6 +1,7 @@
-import math
+import os, math
 from itertools import combinations, permutations
 
+import numpy as np
 import pandas as pd
 
 from lol_fandom import get_tournaments
@@ -14,15 +15,18 @@ class Team:
     """Team information"""
     q = math.log(10) / 400
 
-    def __init__(self, name, league):
+    def __init__(
+        self, name, league, win=0, loss=0, streak=0, r=1000, RD=350,
+        last_game_date=None
+        ):
         self.name = name
         self.league = league
-        self.win = 0
-        self.loss = 0
-        self.streak = 0
-        self.r = 1000
-        self.RD = 350
-        self.last_game_date = None
+        self.win = win
+        self.loss = loss
+        self.streak = streak
+        self.r = r
+        self.RD = RD
+        self.last_game_date = last_game_date
 
     def update_team_name(self, name):
         self.name = name
@@ -147,6 +151,13 @@ class Team:
 
         return data
 
+    def to_tuple(self):
+        return (
+            self.name, self.league, self.win, self.loss,
+            self.win / (self.win + self.loss) if self.win != 0 else 0,
+            self.streak, self.r, self.RD, self.last_game_date
+        )
+
 def get_team_id(teams_id, name):
     return teams_id.loc[teams_id['team'] == name, 'team_id'].iloc[0]
 
@@ -178,7 +189,17 @@ def get_rating(teams):
     Returns:
         DataFrame: Rating of teams
     """
-    ratings = pd.DataFrame(data=map(lambda x: x.to_dict(), teams.values()))
+    # ratings = pd.DataFrame(data=map(lambda x: x.to_dict(), teams.values()))
+    data = np.array(
+        list(map(lambda x: x.to_tuple(), teams.values())),
+        dtype=[
+            ('Team', 'object'), ('League', 'object'), ('Win', 'int'),
+            ('Loss', 'int'), ('WinRate', 'float'), ('Streak', 'int'),
+            ('r', 'float'), ('RD', 'float'),
+            ('last_game_date', 'datetime64[ns]')
+        ]
+    )
+    ratings = pd.DataFrame.from_records(data)
     ratings = ratings.sort_values(by='r', ascending=False).reset_index(drop=True)
     return ratings
 
@@ -201,14 +222,37 @@ def is_proper_league(league):
         return False
     return True
 
+def parse_teams(teams_id, rating):
+    teams = {}
+    for row in rating.itertuples():
+        id = get_team_id(teams_id, row.Team)
+        team = Team(
+            row.Team, row.League, row.Win, row.Loss, row.Streak,
+            row.r, row.RD, row.last_game_date
+        )
+        teams[id] = team
+    return teams
+
 
 def main():
     teams_id = pd.read_csv('./csv/teams_id.csv')
 
-    teams = {}
-    for year in range(2011, 2024):
+    for year in range(2023, 2024):
+        if os.path.isfile(f'./csv/glicko_rating/glicko_rating_{year - 1}.csv'):
+            print(f'Parse {year - 1} rating ...')
+            rating = pd.read_csv(
+                f'./csv/glicko_rating/glicko_rating_{year - 1}.csv',
+                parse_dates=['last_game_date']
+            )
+            teams = parse_teams(teams_id, rating)
+            print('Complete')
+        else:
+            teams = {}
+
         tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
-        scoreboard_games = pd.read_csv(f'./csv/scoreboard_games/{year}_scoreboard_games.csv')
+        scoreboard_games = pd.read_csv(
+            f'./csv/scoreboard_games/{year}_scoreboard_games.csv'
+        )
         for page in tournaments['OverviewPage']:
             print(f'{page} rating ...')
             sg = scoreboard_games.loc[scoreboard_games['OverviewPage'] == page]
@@ -237,12 +281,16 @@ def main():
                 teams[id].init_rd()
 
             proceed_rating(teams_id, teams, sg)
+            rating = get_rating(teams)
+            rating.to_csv(
+                f'./csv/glicko_rating/glicko_rating_{year}.csv', index=False
+            )
 
         if not team_check:
             break
-    if team_check:
-        rating = get_rating(teams)
-        rating.to_csv('./csv/glicko_rating.csv', index=False)
+    # if team_check:
+    #     rating = get_rating(teams)
+    #     rating.to_csv(f'./csv/glicko_rating_{year}.csv', index=False)
 
 
 if __name__ == '__main__':
