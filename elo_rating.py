@@ -1,260 +1,250 @@
-"""LoLesports Elo rating"""
+import os
+import logging
+
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+from tqdm import tqdm
 
-from lol_fandom import get_tournaments
-from lol_fandom import get_scoreboard_games
 
-from google_sheet import Sheet
+class Elo:
+    def __init__(self):
+        pass
+
+    def rate(self, rating1, rating2, result):
+        new_rating1, error1 = self._rate(rating1, rating2, result)
+        new_rating2, error2 = self._rate(rating2, rating1, 1 - result)
+
+        rating1.update(new_rating1, error1)
+        rating2.update(new_rating2, error2)
+
+    def _rate(self, rating1, rating2, result):
+        expectation = rating1.get_expectation(rating2)
+        k_factor = rating1.get_k_factor()
+        rating = rating1.rating + k_factor * (result - expectation)
+        error = abs(result - expectation)
+
+        return rating, error
+
+    def get_win_probability(self, rating1, rating2):
+        return rating1.get_expectation(rating2)
+
+
+class Rating:
+    # LOW_K = 32  # below 2100
+    # MID_K = 24  # between 2100 and 2400
+    # HIGH_K = 16  # above 2400
+
+    LOW_K = 140  # below 2100
+    MID_K = 38  # between 2100 and 2400
+    HIGH_K = 25  # above 2400
+
+    def __init__(self, rating=1500, error=0.0):
+        self.rating = rating
+        self.error = error
+
+    def get_expectation(self, other):
+        return 1 / (1 + 10 ** ((other.rating - self.rating) / 400))
+
+    def get_k_factor(self):
+        if self.rating < 2100:
+            return self.LOW_K
+        if self.rating <= 2400:
+            return self.MID_K
+        return self.HIGH_K
+
+    def update(self, rating, error):
+        self.rating = rating
+        self.error += error
+
 
 class Team:
-    """Team information"""
-    K = 20
-    leagues_r = {
-        'LCK': 1000,
-        'LPL': 1000,
-        'LEC': 950,
-        'LCS': 900,
-        'PCS': 850,
-        'VCS': 850,
-        'LJL': 800,
-        'CBLOL': 800,
-        'LLA': 800,
-        'LCO': 800,
-        'TCL': 800,
-        'LCL': 800,
-    }
+    elo = Elo()
 
-    def __init__(self, name, league):
+    def __init__(
+        self,
+        name,
+        league,
+        win=0,
+        loss=0,
+        streak=0,
+        rating=1500,
+        error=0.0,
+        last_game_date=None,
+    ):
         self.name = name
         self.league = league
-        self.win = 0
-        self.loss = 0
-        self.point = 1000
-        # self.point = self.leagues_r[league]
-        self.points = [self.point]
+        self.win = win
+        self.loss = loss
+        self.streak = streak
+        self.rating = Rating(rating, error)
+        self.last_game_date = last_game_date
 
-    @classmethod
-    def update_point(cls, team1, team2, result):
-        """Update rating of team1 and team2
+    @property
+    def winrate(self):
+        return self.win / (self.win + self.loss) if self.win > 0 else 0
 
-        Args:
-            team1 (Team): Team1
-            team2 (Team): Team2
-            result (int): 1 is Team1 win, 0 is Team2 win
-        """
-        assert isinstance(team1, Team)
-        assert isinstance(team2, Team)
+    def update_name(self, name):
+        self.name = name
 
-        team1_wr = team1.get_win_prob(team2)
-        team2_wr = team2.get_win_prob(team1)
-        team1._update_point(team1_wr, result)
-        team2._update_point(team2_wr, 1 - result)
+    def update_league(self, league):
+        self.league = league
 
-    def get_win_prob(self, opponent):
-        """Get win probability
-
-        Args:
-            opponent (Team): Opponent team
-
-        Returns:
-            float: Win probability
-        """
-        assert isinstance(opponent, Team)
-
-        return 1 / (10 ** ((opponent.point - self.point) / 400) + 1)
-
-    def _update_point(self, winrate, result):
-        # result: win 1, loss 0
-        assert result == 0 or result == 1
-
+    def update_result(self, result):
         if result == 1:
             self.win += 1
         else:
             self.loss += 1
 
-        self.point = self.point + self.K * (result - winrate)
-        self.points.append(self.point)
+        self.update_streak(result)
 
-    def to_dict(self):
-        """Make Team to dictionary
+    def update_streak(self, result):
+        result = 1 if result == 1 else -1
+        if (self.streak > 0) == (result > 0):
+            self.streak += result
+        else:
+            self.streak = result
 
-        Returns:
-            dict: Dictionary of Team instance
-        """
-        data = {
-            'League': self.league,
-            'Win': self.win,
-            'Loss': self.loss,
-            'WinRate': self.win / (self.win + self.loss) if self.win != 0 else 0,
-            'Point': self.point
-        }
+    def update_last_game_date(self, game_date):
+        self.last_game_date = game_date
 
-        return data
+    @classmethod
+    def update_match(cls, team1, team2, result, game_date):
+        cls.elo.rate(team1.rating, team2.rating, result)
 
-    def to_dataframe(self):
-        """Make Team points to DataFrame
+        team1.update_result(result)
+        team2.update_result(1 - result)
+        team1.update_last_game_date(game_date)
+        team2.update_last_game_date(game_date)
 
-        Returns:
-            DataFrame: Points of Team
-        """
-        df = pd.DataFrame({
-            'name': [self.name] * len(self.points),
-            'point': self.points
-        })
-        return df
+    def get_win_probability(self, other):
+        assert isinstance(other, Team)
+
+        return self.elo.get_win_probability(self.rating, other.rating)
+
+    def to_tuple(self):
+        return (
+            self.name,
+            self.league,
+            self.win,
+            self.loss,
+            self.winrate,
+            self.streak,
+            self.rating.rating,
+            self.rating.error,
+            self.last_game_date,
+        )
 
 
-def proceed_rating(teams, games):
-    """Proceed rating with teams and games
+def get_team_id(teams_id, team_name):
+    return teams_id.loc[teams_id["team"] == team_name, "team_id"].iloc[0]
 
-    Args:
-        teams (list): List of Team instances
-        games (DataFrame): Scoreboard games
-    """
+
+def parse_teams(teams_id, ratings):
+    teams = {}
+    for row in ratings.itertuples():
+        teams[get_team_id(teams_id, row.team)] = Team(
+            row.team,
+            row.league,
+            row.win,
+            row.loss,
+            row.streak,
+            row.rating,
+            row.error,
+            row.last_game_date,
+        )
+    return teams
+
+
+def is_proper_league(league):
+    if league in ["WCS", "MSI"]:
+        return False
+    return True
+
+
+def setup_teams(teams_id, teams, team_names, league):
+    for team_name in team_names:
+        if team_name not in teams_id["team"].values:
+            logging.error('%s not in teams', team_name)
+            return False
+        team_id = get_team_id(teams_id, team_name)
+        if team_id not in teams:
+            teams[team_id] = Team(team_name, league)
+        else:
+            teams[team_id].update_name(team_name)
+            if is_proper_league(league):
+                teams[team_id].update_league(league)
+    return True
+
+
+def rate(teams_id, teams, games):
     for row in games.itertuples():
         team1, team2 = row.Team1, row.Team2
+        game_date = row._6
         result = 1 if row.WinTeam == team1 else 0
-        Team.update_point(teams[team1], teams[team2], result)
+        team1_id, team2_id = get_team_id(teams_id, team1), get_team_id(teams_id, team2)
+        Team.update_match(teams[team1_id], teams[team2_id], result, game_date)
 
-def get_rating(teams):
-    """Get rating of teams
 
-    Args:
-        teams (list): List of Team instances
-
-    Returns:
-        DataFrame: Rating of teams
-    """
-    ratings = pd.DataFrame(
-        data=map(lambda x: x.to_dict(), teams.values()),
-        index=teams.keys()
+def get_ratings(teams):
+    data = np.array(
+        list(map(lambda x: x.to_tuple(), teams.values())),
+        dtype=[
+            ("team", "object"),
+            ("league", "object"),
+            ("win", "int"),
+            ("loss", "int"),
+            ("winrate", "float"),
+            ("streak", "int"),
+            ("rating", "float"),
+            ("error", "float"),
+            ("last_game_date", "datetime64[ns]"),
+        ],
     )
-    ratings = ratings.sort_values(by='Point', ascending=False)
+    ratings = pd.DataFrame.from_records(data)
+    ratings = ratings.sort_values(by="rating", ascending=False, ignore_index=True)
     return ratings
 
-def get_team_name(same_team_names, name):
-    """Get latest name of the team
 
-    Args:
-        same_team_names (dict): Dictionary of names of same teams
-        name (str): Name of the team
+def main(verbose=0):
+    if verbose == 1:
+        logging.basicConfig(level=logging.INFO)
 
-    Returns:
-        str: Latest name of the team
-    """
-    while name in same_team_names:
-        name = same_team_names[name]
-    return name
+    teams_id = pd.read_csv("./csv/teams_id.csv")
 
+    for year in tqdm(range(2011, 2024)):
+        if os.path.isfile(f"./csv/elo_rating/{year - 1}_elo_rating.csv"):
+            logging.info('Parse %d ratings ...', year - 1)
+            ratings = pd.read_csv(
+                f"./csv/elo_rating/{year - 1}_elo_rating.csv",
+                parse_dates=["last_game_date"],
+            )
+            teams = parse_teams(teams_id, ratings)
+            logging.info('Complete!')
+        else:
+            teams = {}
 
-pd.set_option('display.max_columns', None)
-with open('./sheet_id.txt', 'r', encoding='utf8') as f:
-    SHEET_ID = f.read()
+        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+        scoreboard_games = pd.read_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        )
+        for page in tournaments["OverviewPage"]:
+            logging.info('%s rating ...', page)
+            sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
+            logging.info('%d matches', sg.shape[0])
 
-TARGET_LEAGUES = [
-    'LCK', 'LPL', 'LEC', 'LCS', 'MSI', 'WCS',
-    'PCS', 'VCS', 'LJL', 'CBLOL', 'LLA', 'LCO', 'TCL', 'LCL',
-]
-SAME_TEAM_NAMES = {
-    # LCK
-    'Afreeca Freecs': 'Kwangdong Freecs',
-    # LPL
-    'eStar (Chinese Team)': 'Ultra Prime',
-    'Rogue Warriors': "Anyone's Legend",
-    'Suning': 'Weibo Gaming',
-    # PCS
-    'Alpha Esports': 'Hurricane Gaming',
-    # VCS
-    'Percent Esports': 'Burst The Sky Esports',
-    'Luxury Esports': 'GMedia Luxury',
-    # CBLOL
-    'Flamengo Esports': 'Flamengo Los Grandes',
-    'Netshoes Miners': 'Miners',
-    'Vorax': 'Vorax Liberty',
-    'Cruzeiro eSports': 'Netshoes Miners',
-    'Vorax Liberty': 'Liberty',
-    # LCO
-    'Legacy Esports': 'Kanga Esports',
-    # TCL
-    'SuperMassive Esports': 'SuperMassive Blaze',
-}
+            league = sg["League"].iloc[0]
+            team_names = sg[["Team1", "Team2"]].unstack().unique()
+            team_check = setup_teams(teams_id, teams, team_names, league)
+            if not team_check:
+                break
+
+            rate(teams_id, teams, sg)
+            ratings = get_ratings(teams)
+            ratings.to_csv(f"./csv/elo_rating/{year}_elo_rating.csv", index=False)
+
+        if not team_check:
+            break
 
 
-def main():
-    """Elo rating system"""
-    sheet = Sheet(SHEET_ID)
-    sheet.connect_sheet()
-
-    tournaments = pd.DataFrame()
-    for league in TARGET_LEAGUES:
-        t = get_tournaments(f'L.League_Short="{league}" and T.Year=2022')
-        tournaments = pd.concat([tournaments, t])
-    tournaments = tournaments.sort_values(
-        by=['Year', 'DateStart', 'Date']
-    ).reset_index(drop=True)
-
-    teams = {}
-    for page in tournaments['OverviewPage']:
-        print(f'{page} rating ...')
-        scoreboard_games = get_scoreboard_games(f'T.OverviewPage="{page}"')
-        if scoreboard_games is None:
-            print(f'{page} is None\n')
-            continue
-        print(f'{scoreboard_games.shape[0]} games')
-        scoreboard_games = scoreboard_games.sort_values(
-            by='DateTime UTC'
-        ).reset_index(drop=True)
-
-        team_names = scoreboard_games[['Team1', 'Team2']].apply(pd.unique)
-        team_names = list(set(list(team_names['Team1']) + list(team_names['Team2'])))
-        league = page.split('/')[0]
-        new_teams = {}
-        for name in team_names:
-            new_name = get_team_name(SAME_TEAM_NAMES, name)
-            if name not in teams:
-                if name == new_name:
-                    teams[name] = Team(name, league)
-                    new_teams[(name,)] = True
-                else:
-                    if new_name not in teams:
-                        teams[new_name] = Team(new_name, league)
-                        new_teams[(name, new_name)] = True
-                    teams[name] = teams[new_name]
-        if len(new_teams) > 0:
-            print(f'There are {len(new_teams)} new teams')
-            print(sorted(list(new_teams.keys()), key=lambda x: x[0].lower()))
-        print()
-        proceed_rating(teams, scoreboard_games)
-
-    rating = get_rating(teams)
-
-
-    team_names = [
-        'Gen.G', 'T1', 'DWG KIA', 'DRX',
-        'JD Gaming', 'Top Esports', 'EDward Gaming', 'Royal Never Give Up',
-        'G2 Esports', 'Rogue (European Team)', 'Fnatic',
-        'Cloud9', '100 Thieves', 'Evil Geniuses.NA',
-        'CTBC Flying Oyster', 'GAM Esports'
-    ]
-
-    rating.index = rating.index.set_names('Team')
-    sheet.update_sheet('elo_rating', rating.loc[team_names].sort_values(
-        by='Point', ascending=False
-    ))
-
-
-    _, ax = plt.subplots(1, 1, figsize=(20, 20))
-    df = pd.DataFrame()
-    for name in team_names:
-        team = teams[name]
-        temp = team.to_dataframe()
-        df = pd.concat([df, temp])
-    sns.lineplot(data=df, x=df.index, y='point', hue='name', ax=ax)
-    plt.show()
-
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    main(verbose=0)
