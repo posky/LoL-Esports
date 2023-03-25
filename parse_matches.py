@@ -1,144 +1,211 @@
-from collections import Counter
+"""Parse lolesports matches"""
 import datetime
+import logging
+from typing import List
 
 import pandas as pd
-import numpy as np
+from tqdm import tqdm
 
-from lol_fandom import SITE, set_default_delay
 from lol_fandom import get_leagues, get_tournaments
 from lol_fandom import get_scoreboard_games, get_scoreboard_players
 from lol_fandom import get_tournament_rosters, get_match_schedule
 
-pd.set_option('display.max_columns', None)
+pd.set_option("display.max_columns", None)
 # set_default_delay(0.5)
 
-def change_to_tuple(lst):
-    return '(' + ', '.join(map(lambda x: f'"{x}"', lst)) + ')'
+
+def change_to_tuple(lst: List[str]) -> str:
+    """Change list of string to tuple
+
+    Args:
+        lst (List[str]): List of string
+
+    Returns:
+        str: tuple
+    """
+    return "(" + ", ".join(map(lambda x: f'"{x}"', lst)) + ")"
 
 
-def parse_tournaments(start=2011, end=datetime.datetime.now().year):
-    print('=========== Tournaments ===========')
-    leagues = get_leagues(where=f'L.Level="Primary" and L.IsOfficial="Yes"')
-    for year in range(start, end + 1):
-        print(f'{year} tournaments')
+def parse_tournaments(
+    start: int = 2011, end: int = datetime.datetime.now().year
+) -> None:
+    """Parse tournaments from start year to end year.
+
+    Args:
+        start (int, optional): Start year of tournaments. Defaults to 2011.
+        end (int, optional): End year of tournaments. Defaults to datetime.datetime.now().year.
+    """
+    logging.info("=========== Tournaments ===========")
+    leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
+    for year in tqdm(range(start, end + 1)):
+        logging.debug("%d tournaments", year)
         tournaments = pd.DataFrame()
-        for league in leagues['League Short']:
+        for league in tqdm(leagues["League Short"]):
             t = get_tournaments(where=f'L.League_Short="{league}" and T.Year={year}')
-            print(f'\t{league} - {t.shape[0]}')
+            logging.debug("\t%s - %d", league, t.shape[0])
             tournaments = pd.concat([tournaments, t], ignore_index=True)
         tournaments = tournaments.sort_values(
-            by=['Year', 'DateStart', 'Date']
+            by=["Year", "DateStart", "Date"]
         ).reset_index(drop=True)
 
-        tournaments.to_csv(f'./csv/tournaments/{year}_tournaments.csv', index=False)
-        print(f'{year} tournaments - {tournaments.shape}')
+        tournaments.to_csv(f"./csv/tournaments/{year}_tournaments.csv", index=False)
+        logging.debug("%d tournaments - %s", year, tournaments.shape)
 
-def parse_scoreboard_games(start=2011, end=datetime.datetime.now().year):
-    print('=========== Scoreboard Games ===========')
-    leagues = get_leagues(where=f'L.Level="Primary" and L.IsOfficial="Yes"')
-    for year in range(start, end + 1):
-        tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
-        print(f'{year} - tournament {tournaments.shape}')
+
+def parse_scoreboard_games(start: int = 2011, end: int = datetime.datetime.now().year):
+    """Parse scoreboard games from start year to end year.
+
+    Args:
+        start (int, optional): Start year of tournaments. Defaults to 2011.
+        end (int, optional): End year of tournaments. Defaults to datetime.datetime.now().year.
+    """
+    logging.info("=========== Scoreboard Games ===========")
+    leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
+    for year in tqdm(range(start, end + 1)):
+        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+        logging.debug("%d - tournament %s", year, tournaments.shape)
         scoreboard_games = pd.DataFrame()
-        for page in tournaments['OverviewPage']:
+        for page in tqdm(tournaments["OverviewPage"]):
             sg = get_scoreboard_games(where=f'T.OverviewPage="{page}"')
             if sg is None:
-                print(f'\t{page} - drop')
+                logging.debug("\t%s - drop", page)
                 tournaments.drop(
-                    tournaments.loc[tournaments['OverviewPage'] == page].index,
-                    inplace=True
+                    tournaments.loc[tournaments["OverviewPage"] == page].index,
+                    inplace=True,
                 )
                 continue
             league = tournaments.loc[
-                tournaments['OverviewPage'] == page, 'League'
+                tournaments["OverviewPage"] == page, "League"
             ].iloc[0]
-            league = leagues.loc[leagues['League'] == league, 'League Short'].iloc[0]
-            sg['League'] = league
-            print(f'\t{page} - {sg.shape[0]}')
+            league = leagues.loc[leagues["League"] == league, "League Short"].iloc[0]
+            sg["League"] = league
+            logging.debug("%s - %d", page, sg.shape[0])
             scoreboard_games = pd.concat([scoreboard_games, sg], ignore_index=True)
-        scoreboard_games = scoreboard_games.sort_values(
-            by='DateTime UTC'
-        ).reset_index(drop=True)
-        scoreboard_games.to_csv(
-            f'./csv/scoreboard_games/{year}_scoreboard_games.csv', index=False
+        scoreboard_games = scoreboard_games.sort_values(by="DateTime UTC").reset_index(
+            drop=True
         )
-        print(f'{year} scoreboard_games {scoreboard_games.shape}')
-        tournaments.to_csv(f'./csv/tournaments/{year}_tournaments.csv', index=False)
-        print(f'{year} tournaments {tournaments.shape}')
+        scoreboard_games.to_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv", index=False
+        )
+        logging.debug("%d scoreboard_games %s", year, scoreboard_games.shape)
+        tournaments.to_csv(f"./csv/tournaments/{year}_tournaments.csv", index=False)
+        logging.debug("%d tournaments %s", year, tournaments.shape)
 
-def parse_scoreboard_players(start=2011, end=datetime.datetime.now().year):
-    print('=========== Scoreboard Players ===========')
-    for year in range(start, end + 1):
-        tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
-        scoreboard_games = pd.read_csv(f'./csv/scoreboard_games/{year}_scoreboard_games.csv')
-        print(f'{year} - tournament {tournaments.shape}')
-        print(f'{year} - scoreboard games {scoreboard_games.shape}')
+
+def parse_scoreboard_players(
+    start: int = 2011, end: int = datetime.datetime.now().year
+):
+    """Parse scoreboard players from start year to end year.
+
+    Args:
+        start (int, optional): Start year of tournaments. Defaults to 2011.
+        end (int, optional): End year of tournaments. Defaults to datetime.datetime.now().year.
+    """
+    logging.info("=========== Scoreboard Players ===========")
+    for year in tqdm(range(start, end + 1)):
+        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+        scoreboard_games = pd.read_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        )
+        logging.debug("%d - tournament %s", year, tournaments.shape)
+        logging.debug("%d - scoreboard games %s", year, scoreboard_games.shape)
         scoreboard_players = pd.DataFrame()
-        for page in tournaments['OverviewPage']:
-            print(f'\t{page}', end='')
-            teams = scoreboard_games.loc[
-                scoreboard_games['OverviewPage'] == page, ['Team1', 'Team2']
-            ].unstack().unique()
+        for page in tqdm(tournaments["OverviewPage"]):
+            logging.debug("\t%s", page)
+            teams = (
+                scoreboard_games.loc[
+                    scoreboard_games["OverviewPage"] == page, ["Team1", "Team2"]
+                ]
+                .unstack()
+                .unique()
+            )
             len_sp = 0
-            for i, team in enumerate(teams, start=1):
-                print(f'\r\t{page} - ({i}/{len(teams)})', end='')
+            for team in teams:
                 sp = get_scoreboard_players(
                     where=f'T.OverviewPage="{page}" and SP.Team="{team}"'
                 )
                 len_sp += sp.shape[0]
                 scoreboard_players = pd.concat([scoreboard_players, sp])
-            len_sg = scoreboard_games.loc[scoreboard_games['OverviewPage'] == page].shape[0]
-            print(f'\n\t\tscoreboard games - {len_sg} | scoreboard players - {len_sp} | {len_sg * 10 == len_sp}')
+            len_sg = scoreboard_games.loc[
+                scoreboard_games["OverviewPage"] == page
+            ].shape[0]
+            logging.debug(
+                "\t\tscoreboard games - %d | scoreboard players - %d | %s",
+                len_sg,
+                len_sp,
+                len_sg * 10 == len_sp,
+            )
         scoreboard_players = scoreboard_players.sort_values(
-            by=['DateTime UTC', 'Team', 'Role Number']
+            by=["DateTime UTC", "Team", "Role Number"]
         ).reset_index(drop=True)
         scoreboard_players.to_csv(
-            f'./csv/scoreboard_players/{year}_scoreboard_players.csv',
-            index=False
+            f"./csv/scoreboard_players/{year}_scoreboard_players.csv", index=False
         )
-        print(f'{year} scoreboard_players {scoreboard_players.shape}')
+        logging.debug("%d scoreboard_players %s", year, scoreboard_players.shape)
 
-def parse_tournament_rosters(start=2011, end=datetime.datetime.now().year):
-    print('=========== Tournament Rosters ===========')
-    for year in range(start, end + 1):
-        tournaments = pd.read_csv(f'./csv/tournaments/{year}_tournaments.csv')
-        print(f'{year} - tournament {tournaments.shape}')
+
+def parse_tournament_rosters(
+    start: int = 2011, end: int = datetime.datetime.now().year
+):
+    """Parse tournament rosters from start year to end year.
+
+    Args:
+        start (int, optional): Start year of tournaments. Defaults to 2011.
+        end (int, optional): End year of tournaments. Defaults to datetime.datetime.now().year.
+    """
+    logging.info("=========== Tournament Rosters ===========")
+    for year in tqdm(range(start, end + 1)):
+        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+        logging.debug("%d - tournament %s", year, tournaments.shape)
         tournament_rosters = pd.DataFrame()
-        for page in tournaments['OverviewPage']:
+        for page in tqdm(tournaments["OverviewPage"]):
             tr = get_tournament_rosters(where=f'T.OverviewPage="{page}"')
-            print(f'\t{page} - {tr.shape[0]}')
+            logging.debug("\t%s - %d", page, tr.shape[0])
             tournament_rosters = pd.concat([tournament_rosters, tr], ignore_index=True)
         tournament_rosters.to_csv(
-            f'./csv/tournament_rosters/{year}_tournament_rosters.csv',
-            index=False
+            f"./csv/tournament_rosters/{year}_tournament_rosters.csv", index=False
         )
-        print(f'{year} tournament rosters {tournament_rosters.shape}')
+        logging.debug("%d tournament rosters %s", year, tournament_rosters.shape)
 
-def parse_matches_schedule(start=2011, end=datetime.datetime.now().year):
-    print('=========== Matches Schedule ===========')
-    for year in range(start, end + 1):
-        scoreboard_games = pd.read_csv(f'./csv/scoreboard_games/{year}_scoreboard_games.csv')
-        print(f'{year} - scoreboard games {scoreboard_games.shape}')
+
+def parse_matches_schedule(start: int = 2011, end: int = datetime.datetime.now().year):
+    """Parse match schedule from start year to end year.
+
+    Args:
+        start (int, optional): Start year of tournaments. Defaults to 2011.
+        end (int, optional): End year of tournaments. Defaults to datetime.datetime.now().year.
+    """
+    logging.info("=========== Matches Schedule ===========")
+    for year in tqdm(range(start, end + 1)):
+        scoreboard_games = pd.read_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        )
+        logging.debug("%d - scoreboard games %s", year, scoreboard_games.shape)
         matches_schedule = pd.DataFrame()
-        for page in scoreboard_games['OverviewPage'].unique():
-            ids = scoreboard_games.loc[scoreboard_games['OverviewPage'] == page, 'MatchId'].unique()
-            ms = get_match_schedule(where=f'MS.MatchId in {change_to_tuple(ids)}')
+        for page in tqdm(scoreboard_games["OverviewPage"].unique()):
+            ids = scoreboard_games.loc[
+                scoreboard_games["OverviewPage"] == page, "MatchId"
+            ].unique()
+            ms = get_match_schedule(where=f"MS.MatchId in {change_to_tuple(ids)}")
             if ms is not None:
-                print(f'\t{page} - {ms.shape[0]}')
+                logging.debug("\t%s - %d", page, ms.shape[0])
                 matches_schedule = pd.concat([matches_schedule, ms], ignore_index=True)
         matches_schedule.to_csv(
-            f'./csv/match_schedule/{year}_match_schedule.csv', index=False
+            f"./csv/match_schedule/{year}_match_schedule.csv", index=False
         )
-        print(f'{year} match schedule {matches_schedule.shape}')
+        logging.debug("%d match schedule %s", year, matches_schedule.shape)
 
 
 def main():
+    """Parse lolesports."""
+    logging.basicConfig(level=logging.INFO)
+
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
-    parse_tournament_rosters(start=2023)
-    parse_matches_schedule(start=2023)
+    # parse_tournament_rosters(start=2023)
+    # parse_matches_schedule(start=2023)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
