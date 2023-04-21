@@ -15,11 +15,20 @@ class RiotAPI:
             with open("./riot_api_key.txt", "r") as f:
                 api_key = f.read().strip()
         self.headers = {"X-Riot-Token": api_key}
+        self.summoner = self.Summoner(self)
+        self.match = self.Match(self)
 
-    def get_data(self, endpoint):
-        url = urljoin(PLATFORM_KR_HOST, endpoint)
+    def get_data(self, url):
         response = requests.get(url, headers=self.headers)
         return response
+
+    def get_data_platform(self, endpoint):
+        url = urljoin(PLATFORM_KR_HOST, endpoint)
+        return self.get_data(url)
+
+    def get_data_region(self, endpoint):
+        url = urljoin(REGION_ASIA_HOST, endpoint)
+        return self.get_data(url)
 
     class Summoner:
         def __init__(self, riot_api):
@@ -28,45 +37,36 @@ class RiotAPI:
 
         def by_account(self, account_id):
             endpoint = self.url + f"by-account/{account_id}"
-            return self.riot_api.get_data(endpoint)
+            return self.riot_api.get_data_platform(endpoint)
 
         def by_summoner_id(self, summoner_id):
             endpoint = self.url + f"{summoner_id}"
-            return self.riot_api.get_data(endpoint)
+            return self.riot_api.get_data_platform(endpoint)
 
         def by_name(self, name):
             endpoint = self.url + f"by-name/{name}"
-            return self.riot_api.get_data(endpoint)
+            return self.riot_api.get_data_platform(endpoint)
 
         def by_puuid(self, puuid):
             endpoint = self.url + f"by-puuid/{puuid}"
-            return self.riot_api.get_data(endpoint)
+            return self.riot_api.get_data_platform(endpoint)
 
-    class Champion:
+    class Match:
         def __init__(self, riot_api):
-            self.url = "/lol/champion-mastery/v4/"
+            self.url = "/lol/match/v5/matches/"
             self.riot_api = riot_api
 
-        def champion_masteries_by_summoner_id(self, summoner_id):
-            endpoint = self.url + f"champion-masteries/by-summoner/{summoner_id}"
-            return self.riot_api.get_data(endpoint)
+        def by_match_id(self, match_id):
+            endpoint = self.url + f"{match_id}"
+            return self.riot_api.get_data_region(endpoint)
 
-        def champion_masteries_by_summoner_id_champion_id(
-            self, summoner_id, champion_id
-        ):
-            endpoint = (
-                self.url
-                + f"champion-masteries/by-summoner/{summoner_id}/by-champion/{champion_id}"
-            )
-            return self.riot_api.get_data(endpoint)
+        def ids_by_puuid(self, puuid):
+            endpoint = self.url + f"by-puuid/{puuid}/ids"
+            return self.riot_api.get_data_region(endpoint)
 
-        def score_by_summoner_id(self, summoner_id):
-            endpoint = self.url + f"scores/by-summoner/{summoner_id}"
-            return self.riot_api.get_data(endpoint)
-
-        def champion_masteries_by_summoner_id_top(self, summoner_id):
-            endpoint = self.url + f"champion-masteries/by-summoner/{summoner_id}/top"
-            return self.riot_api.get_data(endpoint)
+        def timeline_by_match_id(self, match_id):
+            endpoint = self.url + f"{match_id}/timeline"
+            return self.riot_api.get_data_region(endpoint)
 
 
 def rename_summoner_columns(summoner):
@@ -144,9 +144,25 @@ def match_analysis(match):
     match_participants = match_info["participants"]
 
 
+def handling_exception(target, content=""):
+    if target.status_code != 200:
+        raise Exception(content)
+
+    return target.json()
+
+
 def main():
-    update_summoners()
-    update_matches_id()
+    riot_api = RiotAPI()
+    summoner = riot_api.summoner.by_name("hide on bush")
+    summoner = handling_exception(summoner, "summoner")
+
+    match_ids = riot_api.match.ids_by_puuid(summoner["puuid"])
+    match_ids = handling_exception(match_ids, "match ids")
+
+    match_id = match_ids[0]
+    match = riot_api.match.by_match_id(match_id)
+    match = handling_exception(match, "match")
+    print(match)
 
 
 if __name__ == "__main__":
