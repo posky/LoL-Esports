@@ -1,11 +1,14 @@
 import os
 import math
+import logging
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 
 pd.set_option("display.max_columns", None)
+DEFAULT_C = 195.618
 
 
 class Glicko:
@@ -15,11 +18,15 @@ class Glicko:
         pass
 
     def rate(self, rating1, rating2, result):
-        new_rating1, new_ratings_deviation1 = self._rate(rating1, rating2, result)
-        new_rating2, new_ratings_deviation2 = self._rate(rating2, rating1, 1 - result)
+        new_rating1, new_ratings_deviation1, error1 = self._rate(
+            rating1, rating2, result
+        )
+        new_rating2, new_ratings_deviation2, error2 = self._rate(
+            rating2, rating1, 1 - result
+        )
 
-        rating1.update(new_rating1, new_ratings_deviation1)
-        rating2.update(new_rating2, new_ratings_deviation2)
+        rating1.update(new_rating1, new_ratings_deviation1, error1)
+        rating2.update(new_rating2, new_ratings_deviation2, error2)
 
     def _rate(self, rating1, rating2, result):
         g = self.get_g(rating2.ratings_deviation)
@@ -31,7 +38,9 @@ class Glicko:
         ) * g * (result - expectation)
         ratings_deviation = (rating1.ratings_deviation**-2 + d_square_inverse) ** -0.5
 
-        return rating, ratings_deviation
+        error = abs(result - expectation)
+
+        return rating, ratings_deviation, error
 
     def get_g(self, ratings_deviation):
         return (1 + (3 * self.Q**2 * ratings_deviation**2) / math.pi**2) ** -0.5
@@ -49,22 +58,30 @@ class Glicko:
 
 
 class Rating:
-    def __init__(self, rating=1000, ratings_deviation=350):
-        self.rating = rating
-        self.ratings_deviation = ratings_deviation
+    C = DEFAULT_C
 
-    def update(self, rating, ratings_deviation):
+    def __init__(self, rating=1000, ratings_deviation=350, games=0, error=0):
         self.rating = rating
         self.ratings_deviation = ratings_deviation
+        self.games = games
+        self.error = error
+
+    def update(self, rating, ratings_deviation, error):
+        self.rating = rating
+        self.ratings_deviation = ratings_deviation
+        self.games += 1
+        self.error += error
 
     def init_ratings_deviation(self):
-        self.ratings_deviation = 350
+        self.ratings_deviation = min(
+            (self.ratings_deviation**2 + self.C**2 * self.games) ** 0.5, 350
+        )
+        self.games = 0
 
 
 class Team:
     """Team information"""
 
-    q = math.log(10) / 400
     glicko = Glicko()
 
     def __init__(
@@ -76,6 +93,8 @@ class Team:
         streak=0,
         rating=1000,
         ratings_deviation=350,
+        games=0,
+        error=0.0,
         last_game_date=None,
     ):
         self.name = name
@@ -83,7 +102,7 @@ class Team:
         self.win = win
         self.loss = loss
         self.streak = streak
-        self.rating = Rating(rating, ratings_deviation)
+        self.rating = Rating(rating, ratings_deviation, games, error)
         self.last_game_date = last_game_date
 
     def update_team_name(self, name):
@@ -139,6 +158,8 @@ class Team:
             self.streak,
             self.rating.rating,
             self.rating.ratings_deviation,
+            self.rating.games,
+            self.rating.error,
             self.last_game_date,
         )
 
@@ -184,6 +205,8 @@ def get_rating(teams):
             ("streak", "int"),
             ("rating", "float"),
             ("ratings_deviation", "float"),
+            ("games", "int"),
+            ("error", "float"),
             ("last_game_date", "datetime64[ns]"),
         ],
     )
@@ -225,6 +248,8 @@ def parse_teams(teams_id, rating):
             row.streak,
             row.rating,
             row.ratings_deviation,
+            row.games,
+            row.error,
             row.last_game_date,
         )
         teams[team_id] = team
@@ -234,15 +259,15 @@ def parse_teams(teams_id, rating):
 def main():
     teams_id = pd.read_csv("./csv/teams_id.csv")
 
-    for year in range(2023, 2024):
+    for year in tqdm(range(2023, 2024)):
         if os.path.isfile(f"./csv/glicko_rating/glicko_rating_{year - 1}.csv"):
-            print(f"Parse {year - 1} rating ...")
+            logging.info("Parse %d rating ...", year - 1)
             rating = pd.read_csv(
                 f"./csv/glicko_rating/glicko_rating_{year - 1}.csv",
                 parse_dates=["last_game_date"],
             )
             teams = parse_teams(teams_id, rating)
-            print("Complete")
+            logging.info("Complete")
         else:
             teams = {}
 
@@ -250,17 +275,17 @@ def main():
         scoreboard_games = pd.read_csv(
             f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
         )
-        for page in tournaments["OverviewPage"]:
-            print(f"{page} rating ...")
+        for page in tqdm(tournaments["OverviewPage"]):
+            logging.info("%s rating ...", page)
             sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
-            print(f"\t{sg.shape[0]} matches")
+            logging.info("\t%d matches", sg.shape[0])
 
             league = sg["League"].iloc[0]
             team_names = sg[["Team1", "Team2"]].unstack().unique()
             team_check = True
             for name in team_names:
                 if name not in teams_id["team"].values:
-                    print(f"{name} not in teams")
+                    logging.error("%s not in teams", name)
                     team_check = False
                     break
                 team_id = get_team_id(teams_id, name)
