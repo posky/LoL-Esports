@@ -9,6 +9,9 @@ from tqdm import tqdm
 
 
 DEFAULT_POINT = 1500
+DEFAULT_RD = 350
+DEFAULT_SIGMA = 0.6
+DEFAULT_TAU = 0.2
 CONVERT_VALUE = 173.7178
 
 
@@ -17,7 +20,7 @@ class GlickoSystem:
 
     EPSILON = 0.000001
 
-    def __init__(self, tau=0.3):
+    def __init__(self, tau=DEFAULT_TAU):
         """GlickoSystem init.
 
         Args:
@@ -217,8 +220,8 @@ class Team:
         loss=0,
         streak=0,
         point=DEFAULT_POINT,
-        rd=350,
-        sigma=0.6,
+        rd=DEFAULT_RD,
+        sigma=DEFAULT_SIGMA,
         last_game_date=None,
     ):
         """Team init.
@@ -346,11 +349,23 @@ class Team:
 
     def init_rd(self):
         """Init rating deviation."""
-        self.rd = 350
+        self.rd = DEFAULT_RD
 
     def init_sigma(self):
         """Init sigma."""
-        self.sigma = 0.06
+        self.sigma = DEFAULT_SIGMA
+
+    def get_win_probability(self, glicko, op_team):
+        """Calculate win probability against op_team.
+
+        Args:
+            glicko (GlickoSystem): GlickoSystem object.
+            op_team (Team): Team object. Opponent team.
+
+        Returns:
+            float: Win probability.
+        """
+        return glicko.calculate_E(self.mu, op_team.mu, op_team.pi)
 
     def to_tuple(self):
         """Convert to tuple.
