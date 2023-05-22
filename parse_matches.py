@@ -1,6 +1,7 @@
 """Parse lolesports matches"""
 import datetime
 import logging
+import webbrowser
 from typing import List
 
 import pandas as pd
@@ -196,15 +197,56 @@ def parse_matches_schedule(start: int = 2011, end: int = datetime.datetime.now()
         logging.debug("%d match schedule %s", year, matches_schedule.shape)
 
 
+def check_new_team():
+    logging.info("=========== Check new teams ===========")
+
+    teams = pd.read_csv("./csv/teams_id.csv")
+    names = []
+
+    for year in tqdm(range(2011, 2024)):
+        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+        scoreboard_games = pd.read_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        )
+        logging.info("%d - tournament %d", year, tournaments.shape[0])
+        logging.info("%d - scoreboard games %d", year, scoreboard_games.shape[0])
+        for page in tqdm(tournaments["OverviewPage"]):
+            logging.info("\t%s", page)
+            sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
+            team_names = list(set(sg[["Team1", "Team2"]].unstack().unique()))
+            names = []
+            for name in team_names:
+                if name not in teams["team"].values:
+                    names.append(name)
+            if len(names) > 0:
+                names = sorted(names, key=lambda x: x.lower())
+                break
+        if len(names) > 0:
+            url = f'https://lol.fandom.com/wiki/{page.replace(" ", ")")}'
+            webbrowser.open(url)
+            print(url)
+            print(f"{page}\n{names}")
+            for link in names:
+                url = f'https://lol.fandom.com/wiki/{link.replace(" ", "_")}'
+                webbrowser.open(url)
+            break
+    if len(names) == 0:
+        logging.info("Completed")
+
+
 def main():
     """Parse lolesports."""
     logging.basicConfig(level=logging.INFO)
 
+    # Parse lolesports data
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
     # parse_tournament_rosters(start=2023)
     # parse_matches_schedule(start=2023)
+
+    # Check new teams and players
+    check_new_team()
 
 
 if __name__ == "__main__":
