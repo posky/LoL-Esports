@@ -1,4 +1,5 @@
 """Parse lolesports matches"""
+import os
 import datetime
 import logging
 import webbrowser
@@ -27,6 +28,19 @@ def change_to_tuple(lst: List[str]) -> str:
     return "(" + ", ".join(map(lambda x: f'"{x}"', lst)) + ")"
 
 
+def get_updated_contents(df, path, merge_columns):
+    if os.path.isfile(path):
+        origin = pd.read_csv(path)
+    else:
+        origin = pd.DataFrame(columns=df.columns)
+    origin[df.columns] = origin[df.columns].astype(df.dtypes)
+    return (
+        pd.merge(origin, df, how="outer", on=merge_columns, indicator=True)
+        .query('_merge == "right_only"')
+        .drop(columns=["_merge"])
+    )
+
+
 def parse_tournaments(
     start: int = 2011, end: int = datetime.datetime.now().year
 ) -> None:
@@ -49,7 +63,8 @@ def parse_tournaments(
             by=["Year", "DateStart", "Date"]
         ).reset_index(drop=True)
 
-        tournaments.to_csv(f"./csv/tournaments/{year}_tournaments.csv", index=False)
+        file_path = f"./csv/tournaments/{year}_tournaments.csv"
+        tournaments.to_csv(file_path, index=False)
         logging.debug("%d tournaments - %s", year, tournaments.shape)
 
 
@@ -85,9 +100,12 @@ def parse_scoreboard_games(start: int = 2011, end: int = datetime.datetime.now()
         scoreboard_games = scoreboard_games.sort_values(by="DateTime UTC").reset_index(
             drop=True
         )
-        scoreboard_games.to_csv(
-            f"./csv/scoreboard_games/{year}_scoreboard_games.csv", index=False
-        )
+
+        file_path = f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        updated_df = get_updated_contents(scoreboard_games, file_path, ["GameId"])
+        print()
+        print(updated_df)
+        scoreboard_games.to_csv(file_path, index=False)
         logging.debug("%d scoreboard_games %s", year, scoreboard_games.shape)
         tournaments.to_csv(f"./csv/tournaments/{year}_tournaments.csv", index=False)
         logging.debug("%d tournaments %s", year, tournaments.shape)
@@ -139,9 +157,10 @@ def parse_scoreboard_players(
         scoreboard_players = scoreboard_players.sort_values(
             by=["DateTime UTC", "Team", "Role Number"]
         ).reset_index(drop=True)
-        scoreboard_players.to_csv(
-            f"./csv/scoreboard_players/{year}_scoreboard_players.csv", index=False
-        )
+        file_path = f"./csv/scoreboard_players/{year}_scoreboard_players.csv"
+        # updated_df = get_updated_contents(scoreboard_players, file_path)
+        # print(updated_df)
+        scoreboard_players.to_csv(file_path, index=False)
         logging.debug("%d scoreboard_players %s", year, scoreboard_players.shape)
 
 
@@ -208,10 +227,9 @@ def check_new_team():
         scoreboard_games = pd.read_csv(
             f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
         )
-        logging.info("%d - tournament %d", year, tournaments.shape[0])
-        logging.info("%d - scoreboard games %d", year, scoreboard_games.shape[0])
+        # logging.info("%d - tournament %d", year, tournaments.shape[0])
+        # logging.info("%d - scoreboard games %d", year, scoreboard_games.shape[0])
         for page in tqdm(tournaments["OverviewPage"]):
-            logging.info("\t%s", page)
             sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
             team_names = list(set(sg[["Team1", "Team2"]].unstack().unique()))
             names = []
