@@ -1,21 +1,34 @@
 from itertools import product
+from functools import reduce
 
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-from lol_fandom import get_tournaments, get_match_schedule
+from lol_fandom import get_match_schedule
+from google_sheet import Sheet
+
+with open("./sheet_id.txt", "r") as f:
+    SHEET_ID = f.read()
 
 
 class Head2Head:
-    def __init__(self):
-        self.win = 0
-        self.loss = 0
-        self.set_win = 0
-        self.set_loss = 0
+    def __init__(self, win=0, loss=0, set_win=0, set_loss=0):
+        self.win = win
+        self.loss = loss
+        self.set_win = set_win
+        self.set_loss = set_loss
 
     def __str__(self):
         return f"({self.win}, {self.loss})"
+
+    def __add__(self, other):
+        return Head2Head(
+            self.win + other.win,
+            self.loss + other.loss,
+            self.set_win + other.set_win,
+            self.set_loss + other.set_loss,
+        )
 
 
 class Match:
@@ -31,6 +44,13 @@ class Match:
         self.team2_score = team2_score
         self.is_tiebreaker = is_tiebreaker
         self.best_of = best_of
+
+        min_score = min(self.team1_score, self.team2_score)
+        max_score = max(self.team1_score, self.team2_score)
+        if not (min_score < max_score and best_of // 2 + 1 == max_score):
+            self.team1_score = 0
+            self.team2_score = 0
+            self.winner = 0
 
     def set_match(self, idx):
         self.team1_score = self.BEST_OF[self.best_of][idx][0]
@@ -246,21 +266,15 @@ class League:
                 teams[1].standing = teams[0].standing + 1
             elif head_to_head.win < head_to_head.loss:
                 teams[0].standing = teams[1].standing + 1
-
-            print(f"{teams[0].name} vs {teams[1].name}: {head_to_head}")
-
         elif len(teams) == 3:
-            head_to_head_lst = [Head2Head() for _ in range(3)]
-            for i, (team, head_to_head) in enumerate(zip(teams, head_to_head_lst)):
+            head_to_head_lst = []
+            for i, team in enumerate(teams):
                 op_teams = teams[:i] + teams[i + 1 :]
-                head_to_head.win = (
-                    team.head_to_head[op_teams[0].name].win
-                    + team.head_to_head[op_teams[1].name].win
+                head_to_head = (
+                    team.head_to_head[op_teams[0].name]
+                    + team.head_to_head[op_teams[1].name]
                 )
-                head_to_head.loss = (
-                    team.head_to_head[op_teams[0].name].loss
-                    + team.head_to_head[op_teams[1].name].loss
-                )
+                head_to_head_lst.append(head_to_head)
             lst = sorted(
                 zip(teams, head_to_head_lst), key=lambda x: x[1].win, reverse=True
             )
@@ -273,11 +287,11 @@ class League:
                 lst[1][0].standing = lst[0][0].standing + 1
                 lst[2][0].standing = lst[0][0].standing + 2
 
-            for team, head_to_head in lst:
-                print(f"{team.standing}: {team} | {head_to_head}")
-            print()
-
     def simulate_rest_matches(self):
+        teams_standings = {}
+        for team in self.teams.values():
+            teams_standings[team.name] = [0 for _ in range(len(self.teams.values()) + 1)]
+
         num = 4 ** len(self.rest_matches)
         with tqdm(total=num) as pbar:
             for idx in product("0123", repeat=len(self.rest_matches)):
@@ -299,12 +313,16 @@ class League:
                 if len(lst) > 2:
                     self.tiebreak(lst)
 
-                standings = sorted(standings, key=lambda x: x.standing)
+                standings = sorted(standings, key=lambda x: (x.standing, x.name))
+                for team in standings:
+                    teams_standings[team.name][team.standing] += 1
 
                 for match in self.rest_matches:
                     self.rollback_rest_match(match)
                     match.init_match()
                 pbar.update(1)
+
+        return teams_standings
 
 
 def update_matches_to_csv(page_name):
@@ -326,9 +344,12 @@ def update_matches_to_csv(page_name):
 
 
 def main():
-    page = "LCK/2023 Season/Spring Season"
-    update_matches_to_csv(page)
+    # page = "LCK/2023 Season/Spring Season"
+    # update_matches_to_csv(page)
     matches = pd.read_csv("./csv/match_schedule/target_matches_schedule.csv")
+
+    for i in range(80, 90):
+        matches.loc[i, ["Winner", "Team1Score", "Team2Score"]] = [0, 0, 0]
 
     league = League("LCK")
     team_names = matches[["Team1", "Team2"]].unstack().unique()
@@ -355,7 +376,8 @@ def main():
     for team in standings:
         print(team)
 
-    league.simulate_rest_matches()
+    teams_standings = league.simulate_rest_matches()
+    print(teams_standings)
 
 
 if __name__ == "__main__":
