@@ -1,5 +1,6 @@
 from itertools import product
 from functools import reduce
+from pprint import pprint
 
 import pandas as pd
 import numpy as np
@@ -290,7 +291,9 @@ class League:
     def simulate_rest_matches(self):
         teams_standings = {}
         for team in self.teams.values():
-            teams_standings[team.name] = [0 for _ in range(len(self.teams.values()) + 1)]
+            teams_standings[team.name] = [
+                0 for _ in range(len(self.teams.values()) + 1)
+            ]
 
         num = 4 ** len(self.rest_matches)
         with tqdm(total=num) as pbar:
@@ -377,7 +380,23 @@ def main():
         print(team)
 
     teams_standings = league.simulate_rest_matches()
-    print(teams_standings)
+    teams_standings = sorted(
+        teams_standings.items(), key=lambda x: tuple(x[1]), reverse=True
+    )
+
+    sheet = Sheet(SHEET_ID)
+    sheet.connect_sheet()
+
+    values = []
+    value = ["Team"] + [i for i in range(1, len(teams_standings) + 1)]
+    values.append(value)
+    for team, standing in teams_standings:
+        value = [team] + standing[1:]
+        values.append(value)
+
+    sheet.write_sheet(
+        f"simulations!R1C1:C{len(teams_standings) + 1}", {"values": values}
+    )
 
 
 if __name__ == "__main__":
