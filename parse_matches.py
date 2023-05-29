@@ -28,17 +28,18 @@ def change_to_tuple(lst: List[str]) -> str:
     return "(" + ", ".join(map(lambda x: f'"{x}"', lst)) + ")"
 
 
-def get_updated_contents(df, path, merge_columns):
+def get_updated_contents(df, path):
     if os.path.isfile(path):
         origin = pd.read_csv(path)
     else:
         origin = pd.DataFrame(columns=df.columns)
     origin[df.columns] = origin[df.columns].astype(df.dtypes)
-    return (
-        pd.merge(origin, df, how="outer", on=merge_columns, indicator=True)
-        .query('_merge == "right_only"')
-        .drop(columns=["_merge"])
+
+    new_df = pd.merge(
+        origin, df, how="outer", on="GameId", suffixes=["_origin", ""], indicator=True
     )
+    new_df = new_df.query('_merge == "right_only"').drop(columns=["_merge"])
+    return new_df
 
 
 def parse_tournaments(
@@ -102,9 +103,13 @@ def parse_scoreboard_games(start: int = 2011, end: int = datetime.datetime.now()
         )
 
         file_path = f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
-        updated_df = get_updated_contents(scoreboard_games, file_path, ["GameId"])
+        updated_df = get_updated_contents(scoreboard_games, file_path)
         print()
-        print(updated_df)
+        print(
+            updated_df[
+                ["OverviewPage", "Team1", "Team2", "WinTeam", "DateTime UTC", "GameId"]
+            ]
+        )
         scoreboard_games.to_csv(file_path, index=False)
         logging.debug("%d scoreboard_games %s", year, scoreboard_games.shape)
         tournaments.to_csv(f"./csv/tournaments/{year}_tournaments.csv", index=False)
