@@ -1,5 +1,7 @@
 """Glicko Rating System about LoLesports
 """
+import os
+import sys
 import math
 import logging
 
@@ -216,12 +218,15 @@ class Team:
         self,
         name,
         league,
+        team_id,
         win=0,
         loss=0,
         streak=0,
         point=DEFAULT_POINT,
         rd=DEFAULT_RD,
         sigma=DEFAULT_SIGMA,
+        error=0,
+        error_square=0,
         last_game_date=None,
     ):
         """Team init.
@@ -239,14 +244,15 @@ class Team:
         """
         self.name = name
         self.league = league
+        self.team_id = team_id
         self.win = win
         self.loss = loss
         self.streak = streak
         self.point = point
         self.rd = rd
         self.sigma = sigma
-        self.error = 0
-        self.error_square = 0
+        self.error = error
+        self.error_square = error_square
         self.last_game_date = last_game_date
 
     @property
@@ -371,10 +377,11 @@ class Team:
         """Convert to tuple.
 
         Returns:
-            tuple: Tuple(name, league, games, win, loss, winrate, streak,
+            tuple: Tuple(team_id, name, league, games, win, loss, winrate, streak,
             point, rd, sigma, error, error_square, last_game_date)
         """
         return (
+            self.team_id,
             self.name,
             self.league,
             self.games,
@@ -457,6 +464,7 @@ def get_rating(teams):
     data = np.array(
         list(map(lambda x: x.to_tuple(), teams.values())),
         dtype=[
+            ("team_id", "int"),
             ("team", "object"),
             ("league", "object"),
             ("games", "int"),
@@ -473,8 +481,129 @@ def get_rating(teams):
         ],
     )
     ratings = pd.DataFrame.from_records(data)
+    ratings["change"] = ""
     ratings = ratings.sort_values(by="point", ascending=False).reset_index(drop=True)
     return ratings
+
+
+def update_changes(origin, ratings):
+    if len(origin) == 0:
+        origin = pd.DataFrame(columns=ratings.columns)
+
+    for row in ratings.itertuples():
+        df = origin.loc[origin["team_id"] == row.team_id]
+        if len(df) > 0:
+            standing_change = df.index[0] - row.Index
+            point_change = round(row.point - df["point"].iloc[0])
+
+            if standing_change == 0:
+                standing_change = "-"
+            else:
+                standing_change = str(standing_change)
+                if standing_change[0] != "-":
+                    standing_change = "+" + standing_change
+            if point_change == 0:
+                point_change = "-"
+            else:
+                point_change = str(point_change)
+                if point_change[0] != "-":
+                    point_change = "+" + point_change
+            ratings.loc[row.Index, "change"] = f"{standing_change} ({point_change})"
+        else:
+            ratings.loc[row.Index, "change"] = "new"
+
+    return ratings
+
+
+def parse_teams(file_path):
+    last_ratings = pd.read_csv(file_path, parse_dates=["last_game_date"])
+
+    teams = {}
+    for row in last_ratings.itertuples():
+        team_id = int(row.team_id)
+        name = row.team
+        league = row.league
+        win = int(row.win)
+        loss = int(row.loss)
+        streak = int(row.streak)
+        point = float(row.point)
+        rd = float(row.rd)
+        sigma = float(row.sigma)
+        error = float(row.error)
+        error_square = float(row.error_square)
+        last_game_date = row.last_game_date
+        teams[team_id] = Team(
+            name,
+            league,
+            team_id,
+            win,
+            loss,
+            streak,
+            point,
+            rd,
+            sigma,
+            error,
+            error_square,
+            last_game_date,
+        )
+
+    return teams
+
+
+def rate_year_matches(teams_id, glicko, year: int):
+    last_year_file_path = f"./csv/glicko_rating/glicko_rating_{year - 1}.csv"
+    if year > 2011:
+        if os.path.isfile(last_year_file_path):
+            teams = parse_teams(last_year_file_path)
+        else:
+            teams = rate_year_matches(teams_id, glicko, year - 1)
+    else:
+        teams = {}
+
+    tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
+    scoreboard_games = pd.read_csv(
+        f"./csv/scoreboard_games/{year}_scoreboard_games.csv",
+        parse_dates=["DateTime UTC"],
+    )
+    file_path = f"./csv/glicko_rating/glicko_rating_{year}.csv"
+    if os.path.isfile(file_path):
+        origin = pd.read_csv(file_path)
+    elif os.path.isfile(last_year_file_path):
+        origin = pd.read_csv(last_year_file_path)
+    else:
+        origin = pd.DataFrame()
+
+    print(f"{year} year")
+    for page in tqdm(tournaments["OverviewPage"]):
+        sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
+        league = sg["League"].iloc[0]
+        team_names = sg[["Team1", "Team2"]].unstack().unique()
+
+        for name in team_names:
+            if name not in teams_id["team"].values:
+                logging.error("%d year; %s tournament", year, page)
+                logging.error("%s not in teams id", name)
+                sys.exit(1)
+            team_id = get_team_id(teams_id, name)
+            if team_id not in teams:
+                teams[team_id] = Team(name, league, team_id)
+            else:
+                teams[team_id].update_team_name(name)
+                if is_proper_league(league):
+                    teams[team_id].update_league(league)
+
+        for name in team_names:
+            team_id = get_team_id(teams_id, name)
+            teams[team_id].init_rd()
+            teams[team_id].init_sigma()
+
+        proceed_rating(glicko, teams_id, teams, sg)
+
+    ratings = get_rating(teams)
+    ratings = update_changes(origin, ratings)
+    ratings.to_csv(file_path, index=False)
+
+    return teams
 
 
 def main():
@@ -482,48 +611,9 @@ def main():
     glicko = GlickoSystem()
 
     teams_id = pd.read_csv("./csv/teams_id.csv")
-    teams = {}
 
-    for year in tqdm(range(2011, 2024)):
-        tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
-        scoreboard_games = pd.read_csv(
-            f"./csv/scoreboard_games/{year}_scoreboard_games.csv",
-            parse_dates=["DateTime UTC"],
-        )
-
-        for page in tournaments["OverviewPage"]:
-            sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
-            league = sg["League"].iloc[0]
-            team_names = sg[["Team1", "Team2"]].unstack().unique()
-
-            team_check = True
-            for name in team_names:
-                if name not in teams_id["team"].values:
-                    logging.error("%d year; %s tournament", year, page)
-                    logging.error("%s not in teams id", name)
-                    team_check = False
-                    break
-                team_id = get_team_id(teams_id, name)
-                if team_id not in teams:
-                    teams[team_id] = Team(name, league)
-                else:
-                    teams[team_id].update_team_name(name)
-                    if is_proper_league(league):
-                        teams[team_id].update_league(league)
-            if not team_check:
-                break
-
-            for name in team_names:
-                team_id = get_team_id(teams_id, name)
-                teams[team_id].init_rd()
-                teams[team_id].init_sigma()
-
-            proceed_rating(glicko, teams_id, teams, sg)
-            ratings = get_rating(teams)
-            ratings.to_csv(f"./csv/glicko_rating/glicko_rating_{year}.csv", index=False)
-
-        if not team_check:
-            break
+    year = 2023
+    _ = rate_year_matches(teams_id, glicko, year)
 
 
 if __name__ == "__main__":
