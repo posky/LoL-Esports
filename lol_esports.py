@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-from lol_fandom import get_match_schedule
+from lol_fandom import get_tournaments, get_match_schedule
 from google_sheet import Sheet
 
 with open("./sheet_id.txt", "r") as f:
@@ -295,7 +295,9 @@ class League:
                 0 for _ in range(len(self.teams.values()) + 1)
             ]
 
-        num = 4 ** len(self.rest_matches)
+        best_of = self.matches[0].best_of
+        num_cases = len(self.matches[0].BEST_OF[best_of])
+        num = num_cases ** len(self.rest_matches)
         with tqdm(total=num) as pbar:
             for idx in product("0123", repeat=len(self.rest_matches)):
                 for i, match in zip(idx, self.rest_matches):
@@ -328,6 +330,16 @@ class League:
         return teams_standings
 
 
+class LeagueLPL(League):
+    def tiebreak(self, teams):
+        if len(teams) == 2:
+            head_to_head = teams[0].head_to_head[teams[1].name]
+            if head_to_head.win > head_to_head.loss:
+                teams[1].standing = teams[0].standing + 1
+            else:
+                teams[0].standing = teams[1].standing + 1
+
+
 def update_matches_to_csv(page_name):
     match_schedules = get_match_schedule(where=f'MS.OverviewPage="{page_name}"')
     match_schedules.sort_values(by=["DateTime UTC"], ignore_index=True, inplace=True)
@@ -346,15 +358,40 @@ def update_matches_to_csv(page_name):
     matches.to_csv("./csv/match_schedule/target_matches_schedule.csv", index=False)
 
 
+def select_page():
+    tournaments = get_tournaments(
+        where=f'T.Year=2023 and T.TournamentLevel="Primary" and T.IsPlayoffs=0'
+    )
+    tournaments = tournaments.loc[
+        tournaments["League"].isin(
+            [
+                "LoL Champions Korea",
+                "League of Legends Championship Series",
+                "LoL EMEA Championship",
+                "Tencent LoL Pro League",
+            ]
+        )
+    ].sort_values(["League", "SplitNumber"], ignore_index=True)
+
+    pages = tournaments["OverviewPage"].values
+    for i, page in enumerate(pages):
+        print(f"{i}: {page}")
+    number = int(input("Input page number: "))
+
+    assert 0 <= number < len(pages)
+
+    return pages[number]
+
+
 def main():
-    # page = "LCK/2023 Season/Spring Season"
-    # update_matches_to_csv(page)
+    page = select_page()
+    update_matches_to_csv(page)
     matches = pd.read_csv("./csv/match_schedule/target_matches_schedule.csv")
 
     for i in range(80, 90):
         matches.loc[i, ["Winner", "Team1Score", "Team2Score"]] = [0, 0, 0]
 
-    league = League("LCK")
+    league = League(page.split("/")[0])
     team_names = matches[["Team1", "Team2"]].unstack().unique()
     for name in team_names:
         league.add_team(name)
