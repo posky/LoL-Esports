@@ -177,6 +177,7 @@ class LoLStats:
             stats.loc[key, "Ban"] = value
         stats["Games"] = stats[["GamesPlayed", "Ban"]].sum(axis=1)
         stats["BanPickRate"] = stats["Games"].divide(self.games.shape[0])
+        stats["WinRate"] = stats["Win"].divide(stats["GamesPlayed"])
 
         columns = [
             "Games",
@@ -503,6 +504,56 @@ class LoLStats:
 
         return stats[columns].sort_values(by=["Player1", "Player2", role1, role2])
 
+    def get_ban_stats(self):
+        teams_lst = self.games[["Team1", "Team2"]].unstack().unique()
+        index_lst = []
+        for team_name in teams_lst:
+            df = self.games.loc[
+                (self.games["Team1"] == team_name) | (self.games["Team2"] == team_name)
+            ]
+            ban_lst = list(
+                set(
+                    reduce(
+                        lambda x, y: x + y,
+                        df[["Team1Bans", "Team2Bans"]]
+                        .unstack()
+                        .transform(lambda x: x.split(",")),
+                    )
+                )
+            )
+            ban_lst.remove("None") if "None" in ban_lst else None
+            for champion in ban_lst:
+                index_lst.append((team_name, champion))
+
+        idx = pd.MultiIndex.from_tuples(index_lst, names=["Team", "Champion"])
+        columns = ["Games", "By", "Against", "By Rate", "Against Rate"]
+        stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+        stats[columns] = 0
+
+        for match in self.games.itertuples():
+            team1_name = match.Team1
+            team2_name = match.Team2
+            team1_bans = list(set(match.Team1Bans.split(",")))
+            team2_bans = list(set(match.Team2Bans.split(",")))
+            team1_bans.remove("None") if "None" in team1_bans else None
+            team2_bans.remove("None") if "None" in team2_bans else None
+
+            for champion in team1_bans:
+                stats.loc[(team1_name, champion), "By"] += 1
+                stats.loc[(team2_name, champion), "Against"] += 1
+            for champion in team2_bans:
+                stats.loc[(team2_name, champion), "By"] += 1
+                stats.loc[(team1_name, champion), "Against"] += 1
+        for team_name in stats.index.get_level_values(0).unique():
+            stats.loc[team_name, "Games"] = self.games.loc[
+                (self.games["Team1"] == team_name) | (self.games["Team2"] == team_name)
+            ].shape[0]
+        stats[["By Rate", "Against Rate"]] = stats[["By", "Against"]].divide(
+            stats["Games"], axis=0
+        )
+
+        return stats
+
 
 def parse_input(input_string, option):
     if option == 0:
@@ -657,11 +708,27 @@ def select_options():
     return scoreboard_games, scoreboard_players
 
 
+def select_roles(scoreboard_players):
+    roles = scoreboard_players["Role"].unique().tolist()
+
+    role1 = int(
+        input(", ".join(map(lambda x: f"{x[0]}: {x[1]}", enumerate(roles))) + "\n")
+    )
+    role1 = roles.pop(role1)
+    role2 = int(
+        input(", ".join(map(lambda x: f"{x[0]}: {x[1]}", enumerate(roles))) + "\n")
+    )
+    role2 = roles[role2]
+
+    return role1, role2
+
+
 def main():
     sheet = Sheet(SHEET_ID)
     sheet.connect_sheet()
 
     scoreboard_games, scoreboard_players = select_options()
+    role1, role2 = select_roles(scoreboard_players)
 
     players_id = pd.read_csv("./csv/players_id.csv")
 
@@ -691,7 +758,7 @@ def main():
     print("Complete")
 
     print("Duo Stats ... ", end="")
-    duo_stats = stats.get_duo_champions_stats()
+    duo_stats = stats.get_duo_champions_stats(role1, role2)
     duo_stats.to_csv("./csv/stats/duo.csv")
     sheet.update_sheet("duo", duo_stats)
     print("Complete")
@@ -713,13 +780,19 @@ def main():
     print("Complete")
 
     print("Duo player by champion stats ... ", end="")
-    duo_player_by_champion_stats = stats.get_duo_player_by_champion_stats()
+    duo_player_by_champion_stats = stats.get_duo_player_by_champion_stats(role1, role2)
     duo_player_by_champion_stats.to_csv(
         "./csv/stats/duo_player_by_champion.csv", index=False
     )
     sheet.update_sheet(
         "duo_player_by_champion", duo_player_by_champion_stats, index=False
     )
+    print("Complete")
+
+    print("Ban stats ... ", end="")
+    ban_stats = stats.get_ban_stats()
+    ban_stats.to_csv("./csv/stats/ban.csv")
+    sheet.update_sheet("ban", ban_stats)
     print("Complete")
 
 
