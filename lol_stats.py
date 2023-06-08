@@ -526,7 +526,15 @@ class LoLStats:
                 index_lst.append((team_name, champion))
 
         idx = pd.MultiIndex.from_tuples(index_lst, names=["Team", "Champion"])
-        columns = ["Games", "By", "Against", "By Rate", "Against Rate"]
+        columns = [
+            "Games",
+            "By",
+            "Against",
+            "By Rate",
+            "Against Rate",
+            "By Blue",
+            "By Red",
+        ]
         stats = pd.DataFrame(index=idx, columns=columns).sort_index()
         stats[columns] = 0
 
@@ -541,9 +549,11 @@ class LoLStats:
             for champion in team1_bans:
                 stats.loc[(team1_name, champion), "By"] += 1
                 stats.loc[(team2_name, champion), "Against"] += 1
+                stats.loc[(team1_name, champion), "By Blue"] += 1
             for champion in team2_bans:
                 stats.loc[(team2_name, champion), "By"] += 1
                 stats.loc[(team1_name, champion), "Against"] += 1
+                stats.loc[(team2_name, champion), "By Red"] += 1
         for team_name in stats.index.get_level_values(0).unique():
             stats.loc[team_name, "Games"] = self.games.loc[
                 (self.games["Team1"] == team_name) | (self.games["Team2"] == team_name)
