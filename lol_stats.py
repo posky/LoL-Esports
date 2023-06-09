@@ -574,6 +574,26 @@ class LoLStats:
 
         return stats
 
+    def get_champions_by_position_stats(self):
+        idx = list(set(self.merged[["Champion", "IngameRole"]].itertuples(index=False)))
+        idx = pd.MultiIndex.from_tuples(idx, names=["Champion", "Position"])
+        columns = ["Games", "Win", "Loss", "WinRate"]
+        stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+        stats[columns] = 0
+
+        for champion, position in stats.index:
+            idx = (champion, position)
+            df = self.merged.loc[
+                (self.merged["Champion"] == champion)
+                & (self.merged["IngameRole"] == position)
+            ]
+            stats.loc[idx, "Games"] = df.shape[0]
+            stats.loc[idx, "Win"] = df.loc[df["PlayerWin"] == "Yes"].shape[0]
+            stats.loc[idx, "Loss"] = df.loc[df["PlayerWin"] == "No"].shape[0]
+        stats["WinRate"] = stats["Win"].divide(stats["Games"])
+
+        return stats
+
 
 def parse_input(input_string, option):
     if option == 0:
@@ -813,6 +833,12 @@ def main():
     ban_stats = stats.get_ban_stats()
     ban_stats.to_csv("./csv/stats/ban.csv")
     sheet.update_sheet("ban", ban_stats)
+    print("Complete")
+
+    print("Champions by position stats ... ", end="")
+    champions_by_position_stats = stats.get_champions_by_position_stats()
+    champions_by_position_stats.to_csv("./csv/stats/champions_by_position.csv")
+    sheet.update_sheet("champions_by_position", champions_by_position_stats)
     print("Complete")
 
 
