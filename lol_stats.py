@@ -136,12 +136,35 @@ class LoLStats:
         champion_names = list(set(list(self.players["Champion"].unique()) + ban_list))
         while "None" in ban_list:
             ban_list.remove("None")
-        while "None" in champion_names:
-            champion_names.remove("None")
+        champion_names.remove("None") if "None" in champion_names else None
 
-        stats = pd.DataFrame(index=champion_names)
+        columns = [
+            "Games",
+            "BanPickRate",
+            "Ban",
+            "Blue Ban",
+            "Red Ban",
+            "GamesPlayed",
+            "By",
+            "Win",
+            "Loss",
+            "WinRate",
+            "Kills",
+            "Deaths",
+            "Assists",
+            "KDA",
+            "CS",
+            "CSPM",
+            "Gold",
+            "GPM",
+            "Damage",
+            "DPM",
+        ]
+
+        stats = pd.DataFrame(index=champion_names, columns=columns)
         stats.index.set_names("Champion", inplace=True)
         stats.sort_index(inplace=True)
+        stats[columns] = 0
 
         for champ_name in stats.index:
             champions_df = self.merged.loc[self.merged["Champion"] == champ_name]
@@ -171,6 +194,13 @@ class LoLStats:
             stats.loc[champ_name, "Damage"] = champions_df["DamageToChampions"].mean()
             stats.loc[champ_name, "DPM"] = champions_df["DPM"].mean()
 
+            stats.loc[champ_name, "Blue Ban"] = self.games.loc[
+                self.games["Team1Bans"].str.contains(champ_name)
+            ].shape[0]
+            stats.loc[champ_name, "Red Ban"] = self.games.loc[
+                self.games["Team2Bans"].str.contains(champ_name)
+            ].shape[0]
+
         stats["Ban"] = 0
         ban_counter = Counter(ban_list)
         for key, value in ban_counter.items():
@@ -179,29 +209,9 @@ class LoLStats:
         stats["BanPickRate"] = stats["Games"].divide(self.games.shape[0])
         stats["WinRate"] = stats["Win"].divide(stats["GamesPlayed"])
 
-        columns = [
-            "Games",
-            "BanPickRate",
-            "Ban",
-            "GamesPlayed",
-            "By",
-            "Win",
-            "Loss",
-            "WinRate",
-            "Kills",
-            "Deaths",
-            "Assists",
-            "KDA",
-            "CS",
-            "CSPM",
-            "Gold",
-            "GPM",
-            "Damage",
-            "DPM",
-        ]
         assert len(columns) == len(stats.columns)
 
-        return stats[columns].sort_values(by="Games", ascending=False)
+        return stats.sort_values(by="Games", ascending=False)
 
     def get_players_stats(self):
         idx = self.merged["player_id"].unique()
