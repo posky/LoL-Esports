@@ -594,6 +594,81 @@ class LoLStats:
 
         return stats
 
+    def get_players_by_position_stats(self):
+        idx = list(
+            set(self.merged[["player_id", "IngameRole"]].itertuples(index=False))
+        )
+        idx = pd.MultiIndex.from_tuples(idx, names=["Player_id", "Position"])
+        columns = [
+            "Player",
+            "Team",
+            "Games",
+            "Win",
+            "Loss",
+            "WinRate",
+            "Kills",
+            "Deaths",
+            "Assists",
+            "KDA",
+            "DPM",
+            "CS",
+            "CSPM",
+            "Gold",
+            "GPM",
+            "KP",
+            "KS",
+            "GS",
+            "ChampionsPlayed",
+        ]
+        stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+        stats[columns] = 0
+
+        for player_id, position in stats.index:
+            idx = (player_id, position)
+            df = self.merged.loc[
+                (self.merged["player_id"] == player_id)
+                & (self.merged["IngameRole"] == position)
+            ]
+            stats.loc[idx, "Player"] = df["Name"].values[-1]
+            stats.loc[idx, "Team"] = df["Team"].values[-1]
+            stats.loc[idx, "Games"] = df.shape[0]
+            stats.loc[idx, "Win"] = df.loc[df["PlayerWin"] == "Yes"].shape[0]
+            stats.loc[idx, "Loss"] = df.loc[df["PlayerWin"] == "No"].shape[0]
+            mean_columns = [
+                "Kills",
+                "Deaths",
+                "Assists",
+                "DPM",
+                "CS",
+                "CSPM",
+                "Gold",
+                "GPM",
+            ]
+            stats.loc[idx, mean_columns] = df[mean_columns].mean()
+            stats.loc[idx, "KDA"] = df[["Kills", "Assists"]].unstack().sum()
+            deaths = df["Deaths"].sum()
+            if deaths > 0:
+                stats.loc[idx, "KDA"] = stats.loc[idx, "KDA"] / deaths
+            stats.loc[idx, "KP"] = (
+                df[["Kills", "Assists"]].unstack().sum() / df["TeamKills"].sum()
+                if stats.loc[idx, ["Kills", "Assists"]].sum() > 0
+                else 0
+            )
+            stats.loc[idx, "KS"] = (
+                df["Kills"].sum() / df["TeamKills"].sum()
+                if stats.loc[idx, "Kills"] > 0
+                else 0
+            )
+            stats.loc[idx, "GS"] = df["Gold"].sum() / df["TeamGold"].sum()
+            stats.loc[idx, "ChampionsPlayed"] = len(df["Champion"].unique())
+
+        stats["WinRate"] = stats["Win"].divide(stats["Games"])
+
+        stats.reset_index(inplace=True)
+        stats.drop(columns=["Player_id"], inplace=True)
+        stats.set_index(["Player", "Position"], inplace=True, drop=True)
+        return stats
+
 
 def parse_input(input_string, option):
     if option == 0:
@@ -772,6 +847,8 @@ def main():
 
     players_id = pd.read_csv("./csv/players_id.csv")
 
+    print()
+
     stats = LoLStats(scoreboard_games, scoreboard_players, players_id)
     print("Team stats ... ", end="")
     teams_stats = stats.get_teams_stats()
@@ -791,10 +868,16 @@ def main():
     sheet.update_sheet("players", players_stats, index=False)
     print("Complete")
 
-    print("Player by Champion Stats ... ", end="")
-    player_by_champion_stats = stats.get_player_by_champion_stats()
-    player_by_champion_stats.to_csv("./csv/stats/player_by_champion.csv", index=False)
-    sheet.update_sheet("player_by_champion", player_by_champion_stats, index=False)
+    print("Ban stats ... ", end="")
+    ban_stats = stats.get_ban_stats()
+    ban_stats.to_csv("./csv/stats/ban.csv")
+    sheet.update_sheet("ban", ban_stats)
+    print("Complete")
+
+    print("Champions by position stats ... ", end="")
+    champions_by_position_stats = stats.get_champions_by_position_stats()
+    champions_by_position_stats.to_csv("./csv/stats/champions_by_position.csv")
+    sheet.update_sheet("champions_by_position", champions_by_position_stats)
     print("Complete")
 
     print("Duo Stats ... ", end="")
@@ -807,6 +890,12 @@ def main():
     vs_stats = stats.get_vs_stats()
     vs_stats.to_csv("./csv/stats/vs.csv")
     sheet.update_sheet("vs", vs_stats)
+    print("Complete")
+
+    print("Player by Champion Stats ... ", end="")
+    player_by_champion_stats = stats.get_player_by_champion_stats()
+    player_by_champion_stats.to_csv("./csv/stats/player_by_champion.csv", index=False)
+    sheet.update_sheet("player_by_champion", player_by_champion_stats, index=False)
     print("Complete")
 
     print("Player by champion vs stats ... ", end="")
@@ -829,16 +918,10 @@ def main():
     )
     print("Complete")
 
-    print("Ban stats ... ", end="")
-    ban_stats = stats.get_ban_stats()
-    ban_stats.to_csv("./csv/stats/ban.csv")
-    sheet.update_sheet("ban", ban_stats)
-    print("Complete")
-
-    print("Champions by position stats ... ", end="")
-    champions_by_position_stats = stats.get_champions_by_position_stats()
-    champions_by_position_stats.to_csv("./csv/stats/champions_by_position.csv")
-    sheet.update_sheet("champions_by_position", champions_by_position_stats)
+    print("Players by position stats")
+    players_by_position_stats = stats.get_players_by_position_stats()
+    players_by_position_stats.to_csv("./csv/stats/players_by_position.csv")
+    sheet.update_sheet("players_by_position", players_by_position_stats)
     print("Complete")
 
 
