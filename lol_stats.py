@@ -20,8 +20,7 @@ END_YEAR = datetime.datetime.now().year
 
 class LoLStats:
     def __init__(self, games, players, players_id):
-        assert games.shape[0] > 0
-        assert players.shape[0] > 0
+        assert games.shape[0] > 0 and players.shape[0] > 0
 
         self.games = games
         self.players = players
@@ -667,6 +666,50 @@ class LoLStats:
         stats.reset_index(inplace=True)
         stats.drop(columns=["Player_id"], inplace=True)
         stats.set_index(["Player", "Position"], inplace=True, drop=True)
+        stats.sort_values(by=["Team", "Position", "Player"], inplace=True)
+
+        return stats
+
+    def get_duo_champions_vs_stats(self, role1="Bot", role2="Support"):
+        roles = self.players["Role"].unique()
+        assert role1 != role2 and role1 in roles and role2 in roles
+
+        role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
+        role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
+        columns = ["Champion", "Team", "PlayerWin", "IngameRole", "GameId"]
+        merged = pd.merge(
+            role1_df[columns], role2_df[columns], how="inner", on=["GameId", "Team"]
+        )
+        merged = pd.merge(merged, merged, how="inner", on="GameId")
+        merged = merged.loc[merged["Team_x"] != merged["Team_y"]]
+
+        idx_lst = list(
+            set(
+                merged[
+                    ["Champion_x_x", "Champion_y_x", "Champion_x_y", "Champion_y_y"]
+                ].itertuples(index=False)
+            )
+        )
+        idx = pd.MultiIndex.from_tuples(
+            idx_lst, names=[f"{role1} 1", f"{role2} 1", f"{role1} 2", f"{role2} 2"]
+        )
+        columns = ["Games", "Win", "Loss", "WinRate"]
+        stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+        stats[columns] = 0
+
+        for champ1, champ2, champ3, champ4 in stats.index:
+            idx = (champ1, champ2, champ3, champ4)
+            df = merged.loc[
+                (merged["Champion_x_x"] == champ1)
+                & (merged["Champion_y_x"] == champ2)
+                & (merged["Champion_x_y"] == champ3)
+                & (merged["Champion_y_y"] == champ4)
+            ]
+            stats.loc[idx, "Games"] = df.shape[0]
+            stats.loc[idx, "Win"] = df.loc[df["PlayerWin_x_x"] == "Yes"].shape[0]
+            stats.loc[idx, "Loss"] = df.loc[df["PlayerWin_x_x"] == "No"].shape[0]
+        stats["WinRate"] = stats["Win"].divide(stats["Games"])
+
         return stats
 
 
@@ -890,6 +933,12 @@ def main():
     vs_stats = stats.get_vs_stats()
     vs_stats.to_csv("./csv/stats/vs.csv")
     sheet.update_sheet("vs", vs_stats)
+    print("Complete")
+
+    print("Duo vs Stats ... ", end="")
+    duo_champions_vs_stats = stats.get_duo_champions_vs_stats(role1, role2)
+    duo_champions_vs_stats.to_csv("./csv/stats/duo_champions_vs_stats.csv")
+    sheet.update_sheet("duo_vs", duo_champions_vs_stats)
     print("Complete")
 
     print("Player by Champion Stats ... ", end="")
