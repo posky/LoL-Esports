@@ -1,6 +1,7 @@
 from itertools import product
 from functools import reduce
 from pprint import pprint
+from collections import OrderedDict
 
 import pandas as pd
 import numpy as np
@@ -359,25 +360,28 @@ def update_matches_to_csv(page_name):
 
 
 def select_page():
+    leagues = {
+        "LCK": "LoL Champions Korea",
+        "LPL": "Tencent LoL Pro League",
+        "LEC": "LoL EMEA Championship",
+        "LCS": "League of Legends Championship Series",
+    }
+    league_lst = list(leagues.keys())
+    for i, league in enumerate(league_lst):
+        print(f"{i}: {league}  ", end="")
+    number = int(input("\nInput league number: "))
+    assert 0 <= number < len(league_lst)
+    league = leagues[league_lst[number]]
+
     tournaments = get_tournaments(
-        where=f'T.Year=2023 and T.TournamentLevel="Primary" and T.IsPlayoffs=0'
-    )
-    tournaments = tournaments.loc[
-        tournaments["League"].isin(
-            [
-                "LoL Champions Korea",
-                "League of Legends Championship Series",
-                "LoL EMEA Championship",
-                "Tencent LoL Pro League",
-            ]
-        )
-    ].sort_values(["League", "SplitNumber"], ignore_index=True)
+        where=f'T.Year=2023 and T.League="{league}"'
+    ).sort_values(["SplitNumber"], ignore_index=True)
 
     pages = tournaments["OverviewPage"].values
+    print()
     for i, page in enumerate(pages):
         print(f"{i}: {page}")
     number = int(input("Input page number: "))
-
     assert 0 <= number < len(pages)
 
     return pages[number]
@@ -387,9 +391,6 @@ def main():
     page = select_page()
     update_matches_to_csv(page)
     matches = pd.read_csv("./csv/match_schedule/target_matches_schedule.csv")
-
-    for i in range(80, 90):
-        matches.loc[i, ["Winner", "Team1Score", "Team2Score"]] = [0, 0, 0]
 
     league = League(page.split("/")[0])
     team_names = matches[["Team1", "Team2"]].unstack().unique()
@@ -416,6 +417,7 @@ def main():
     for team in standings:
         print(team)
 
+    print(f"\n{len(league.rest_matches)} matches")
     teams_standings = league.simulate_rest_matches()
     teams_standings = sorted(
         teams_standings.items(), key=lambda x: tuple(x[1]), reverse=True
