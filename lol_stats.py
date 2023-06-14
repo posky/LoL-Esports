@@ -827,7 +827,10 @@ def select_options():
     logging.info("Read scoreboard games ...")
     scoreboard_games = pd.DataFrame()
     for year in years:
-        games = pd.read_csv(f"./csv/scoreboard_games/{year}_scoreboard_games.csv")
+        games = pd.read_csv(
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv",
+            dtype={"Patch": "object"},
+        )
         scoreboard_games = pd.concat([scoreboard_games, games], ignore_index=True)
     scoreboard_games = scoreboard_games.loc[
         scoreboard_games["OverviewPage"].isin(target_pages)
@@ -844,13 +847,15 @@ def select_options():
     ]
     logging.info("Read scoreboard players complete")
 
-    patch_version = input("Patch version: ")
-    if patch_version != "":
+    patch_versions = input("Patch version: ")
+    if patch_versions != "":
+        patch_versions = patch_versions.split(" ")
         scoreboard_games = scoreboard_games.loc[
-            scoreboard_games["Patch"] == patch_version
+            scoreboard_games["Patch"].isin(patch_versions)
         ]
+        game_id_lst = scoreboard_games["GameId"].tolist()
         scoreboard_players = scoreboard_players.loc[
-            scoreboard_players["Patch"] == patch_version
+            scoreboard_players["GameId"].isin(game_id_lst)
         ]
 
     logging.info(
@@ -859,7 +864,11 @@ def select_options():
         scoreboard_players.shape[0],
     )
 
-    if scoreboard_games.shape[0] * 10 != scoreboard_players.shape[0]:
+    if (
+        scoreboard_games.shape[0] == 0
+        or scoreboard_players.shape[0] == 0
+        or scoreboard_games.shape[0] * 10 != scoreboard_players.shape[0]
+    ):
         logging.error("%s", target_pages)
         sys.exit(-1)
 
@@ -869,6 +878,7 @@ def select_options():
 def select_roles(scoreboard_players):
     roles = scoreboard_players["Role"].unique().tolist()
 
+    print()
     role1 = int(
         input(", ".join(map(lambda x: f"{x[0]}: {x[1]}", enumerate(roles))) + "\n")
     )
