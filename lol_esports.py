@@ -34,7 +34,7 @@ class Head2Head:
 
 
 class Match:
-    BEST_OF = {3: [(2, 0), (2, 1), (1, 2), (0, 2)]}
+    BEST_OF = {3: [(2, 0), (2, 1), (1, 2), (0, 2)], 1: [(1, 0), (0, 1)]}
 
     def __init__(
         self, team1, team2, winner, team1_score, team2_score, is_tiebreaker, best_of
@@ -299,8 +299,9 @@ class League:
         best_of = self.matches[0].best_of
         num_cases = len(self.matches[0].BEST_OF[best_of])
         num = num_cases ** len(self.rest_matches)
+        seq = "".join([str(i) for i in range(len(Match.BEST_OF[best_of]))])
         with tqdm(total=num) as pbar:
-            for idx in product("0123", repeat=len(self.rest_matches)):
+            for idx in product(seq, repeat=len(self.rest_matches)):
                 for i, match in zip(idx, self.rest_matches):
                     match.set_match(int(i))
                     self.update_rest_match(match)
@@ -392,7 +393,11 @@ def main():
     update_matches_to_csv(page)
     matches = pd.read_csv("./csv/match_schedule/target_matches_schedule.csv")
 
-    league = League(page.split("/")[0])
+    league_name = page.split("/")[0]
+    if league_name == "LPL":
+        league = LeagueLPL(league_name)
+    else:
+        league = League(league_name)
     team_names = matches[["Team1", "Team2"]].unstack().unique()
     for name in team_names:
         league.add_team(name)
