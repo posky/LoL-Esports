@@ -1,7 +1,5 @@
 from itertools import product
-from functools import reduce
-from pprint import pprint
-from collections import OrderedDict
+from tabulate import tabulate
 
 import pandas as pd
 import numpy as np
@@ -72,6 +70,8 @@ class Match:
 
 
 class Team:
+    headers = ["Team", "Games", "Matches", "Set", "Point"]
+
     def __init__(self, name):
         self.name = name
         self.win = 0
@@ -188,6 +188,15 @@ class Team:
     def rollback_rest_match(self, match):
         self._rollback_match(match)
         self.rollback_head_to_head(match)
+
+    def to_list(self):
+        return [
+            self.name,
+            self.games,
+            f"{self.win} - {self.loss}",
+            f"{self.set_win} - {self.set_loss}",
+            self.point,
+        ]
 
     def __str__(self):
         return f"{self.name}: {self.games} | {self.win} - {self.loss} | {self.set_win} - {self.set_loss} | {self.point}"
@@ -419,8 +428,12 @@ def main():
     league.proceed_matches()
 
     standings = league.rank()
+
+    table = []
     for team in standings:
-        print(team)
+        table.append(team.to_list())
+    print()
+    print(tabulate(table, headers=Team.headers))
 
     print(f"\n{len(league.rest_matches)} matches")
     teams_standings = league.simulate_rest_matches()
