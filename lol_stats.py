@@ -19,6 +19,8 @@ END_YEAR = datetime.datetime.now().year
 
 
 class LoLStats:
+    duo_list = [("Bot", "Support"), ("Mid", "Jungle"), ("Top", "Jungle")]
+
     def __init__(self, games, players, players_id):
         assert games.shape[0] > 0 and players.shape[0] > 0
 
@@ -341,32 +343,47 @@ class LoLStats:
 
         return stats[columns]
 
-    def get_duo_champions_stats(self, role1="Bot", role2="Support"):
+    def get_duo_champions_stats(self):
         roles = self.players["Role"].unique()
-        assert role1 != role2 and role1 in roles and role2 in roles
+        for role1, role2 in self.duo_list:
+            assert role1 != role2 and role1 in roles and role2 in roles
 
-        role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
-        role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
-        merged = pd.merge(role1_df, role2_df, how="inner", on=["GameId", "Team"])
-        assert merged.shape[0] == self.games.shape[0] * 2
+        stats = pd.DataFrame()
+        for role1, role2 in self.duo_list:
+            role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
+            role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
+            merged = pd.merge(role1_df, role2_df, how="inner", on=["GameId", "Team"])
+            assert merged.shape[0] == self.games.shape[0] * 2
 
-        idx = pd.MultiIndex.from_tuples(
-            list(set(merged[["Champion_x", "Champion_y"]].itertuples(index=False))),
-            names=[role1, role2],
-        )
-        stats = pd.DataFrame(index=idx).sort_index()
-
-        for champ1, champ2 in stats.index:
-            idx = (champ1, champ2)
-            duo_df = merged.loc[
-                (merged["Champion_x"] == champ1) & (merged["Champion_y"] == champ2)
-            ]
-            stats.loc[idx, "Games"] = duo_df.shape[0]
-            stats.loc[idx, "By"] = len(
-                set(duo_df[["player_id_x", "player_id_y"]].itertuples(index=False))
+            idx = pd.MultiIndex.from_tuples(
+                list(
+                    set(
+                        merged[
+                            ["Champion_x", "Champion_y", "IngameRole_x", "IngameRole_y"]
+                        ].itertuples(index=False)
+                    )
+                ),
+                names=["Champion1", "Champion2", "Position1", "Position2"],
             )
-            stats.loc[idx, "Win"] = duo_df.loc[duo_df["PlayerWin_x"] == "Yes"].shape[0]
-            stats.loc[idx, "Loss"] = duo_df.loc[duo_df["PlayerWin_x"] == "No"].shape[0]
+            _stats = pd.DataFrame(index=idx).sort_index()
+
+            for champ1, champ2, pos1, pos2 in _stats.index:
+                idx = (champ1, champ2, pos1, pos2)
+                duo_df = merged.loc[
+                    (merged["Champion_x"] == champ1) & (merged["Champion_y"] == champ2)
+                ]
+                _stats.loc[idx, "Games"] = duo_df.shape[0]
+                _stats.loc[idx, "By"] = len(
+                    set(duo_df[["player_id_x", "player_id_y"]].itertuples(index=False))
+                )
+                _stats.loc[idx, "Win"] = duo_df.loc[
+                    duo_df["PlayerWin_x"] == "Yes"
+                ].shape[0]
+                _stats.loc[idx, "Loss"] = duo_df.loc[
+                    duo_df["PlayerWin_x"] == "No"
+                ].shape[0]
+            stats = pd.concat([stats, _stats])
+        stats.sort_index()
         stats["WinRate"] = stats["Win"].divide(stats["Games"])
 
         return stats
@@ -455,63 +472,72 @@ class LoLStats:
 
         return stats[columns].sort_values(by=["Team", "Player", "Champion"])
 
-    def get_duo_player_by_champion_stats(self, role1="Bot", role2="Support"):
+    def get_duo_player_by_champion_stats(self):
         roles = self.players["Role"].unique()
-        assert role1 != role2 and role1 in roles and role2 in roles
+        for role1, role2 in self.duo_list:
+            assert role1 != role2 and role1 in roles and role2 in roles
 
-        role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
-        role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
-        merged = pd.merge(role1_df, role2_df, how="inner", on=["GameId", "Team"])
-        assert merged.shape[0] == self.games.shape[0] * 2
+        stats = pd.DataFrame()
+        for role1, role2 in self.duo_list:
+            role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
+            role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
+            merged = pd.merge(role1_df, role2_df, how="inner", on=["GameId", "Team"])
+            assert merged.shape[0] == self.games.shape[0] * 2
 
-        idx = pd.MultiIndex.from_tuples(
-            list(
-                set(
-                    merged[
-                        ["player_id_x", "player_id_y", "Champion_x", "Champion_y"]
-                    ].itertuples(index=False)
-                )
-            ),
-            names=["id1", "id2", role1, role2],
-        )
-        stats = pd.DataFrame(index=idx).sort_index()
-
-        for id1, id2, champ1, champ2 in stats.index:
-            idx = (id1, id2, champ1, champ2)
-            partial_df = merged.loc[
-                (merged["player_id_x"] == id1)
-                & (merged["player_id_y"] == id2)
-                & (merged["Champion_x"] == champ1)
-                & (merged["Champion_y"] == champ2)
+            idx = pd.MultiIndex.from_tuples(
+                list(
+                    set(
+                        merged[
+                            ["player_id_x", "player_id_y", "Champion_x", "Champion_y"]
+                        ].itertuples(index=False)
+                    )
+                ),
+                names=["id1", "id2", role1, role2],
+            )
+            columns = [
+                "Player1",
+                "Player2",
+                "Champion1",
+                "Champion2",
+                "Position1",
+                "Position2",
+                "Games",
+                "Win",
+                "Loss",
+                "WinRate",
             ]
+            _stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+            _stats["Position1"] = role1
+            _stats["Position2"] = role2
+            _stats[columns[:-5:-1]] = 0
 
-            stats.loc[idx, "Player1"] = partial_df["Name_x"].iloc[-1]
-            stats.loc[idx, "Player2"] = partial_df["Name_y"].iloc[-1]
-            stats.loc[idx, "Games"] = partial_df.shape[0]
-            stats.loc[idx, "Win"] = partial_df.loc[
-                partial_df["PlayerWin_x"] == "Yes"
-            ].shape[0]
-            stats.loc[idx, "Loss"] = partial_df.loc[
-                partial_df["PlayerWin_x"] == "No"
-            ].shape[0]
+            for id1, id2, champ1, champ2 in _stats.index:
+                idx = (id1, id2, champ1, champ2)
+                partial_df = merged.loc[
+                    (merged["player_id_x"] == id1)
+                    & (merged["player_id_y"] == id2)
+                    & (merged["Champion_x"] == champ1)
+                    & (merged["Champion_y"] == champ2)
+                ]
+
+                _stats.loc[idx, "Player1"] = partial_df["Name_x"].iloc[-1]
+                _stats.loc[idx, "Player2"] = partial_df["Name_y"].iloc[-1]
+                _stats.loc[idx, "Games"] = partial_df.shape[0]
+                _stats.loc[idx, "Win"] = partial_df.loc[
+                    partial_df["PlayerWin_x"] == "Yes"
+                ].shape[0]
+                _stats.loc[idx, "Loss"] = partial_df.loc[
+                    partial_df["PlayerWin_x"] == "No"
+                ].shape[0]
+            stats = pd.concat([stats, _stats])
+
         stats["WinRate"] = stats["Win"].divide(stats["Games"])
-
         stats.reset_index(level=["id1", "id2"], drop=True, inplace=True)
         stats.reset_index(inplace=True)
 
-        columns = [
-            "Player1",
-            "Player2",
-            role1,
-            role2,
-            "Games",
-            "Win",
-            "Loss",
-            "WinRate",
-        ]
-        assert len(columns) == len(stats.columns)
-
-        return stats[columns].sort_values(by=["Player1", "Player2", role1, role2])
+        return stats[columns].sort_values(
+            by=["Player1", "Player2", "Champion1", "Champion2"]
+        )
 
     def get_ban_stats(self):
         teams_lst = self.games[["Team1", "Team2"]].unstack().unique()
@@ -670,44 +696,51 @@ class LoLStats:
 
         return stats
 
-    def get_duo_champions_vs_stats(self, role1="Bot", role2="Support"):
+    def get_duo_champions_vs_stats(self):
         roles = self.players["Role"].unique()
-        assert role1 != role2 and role1 in roles and role2 in roles
+        for role1, role2 in self.duo_list:
+            assert role1 != role2 and role1 in roles and role2 in roles
 
-        role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
-        role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
-        columns = ["Champion", "Team", "PlayerWin", "IngameRole", "GameId"]
-        merged = pd.merge(
-            role1_df[columns], role2_df[columns], how="inner", on=["GameId", "Team"]
-        )
-        merged = pd.merge(merged, merged, how="inner", on="GameId")
-        merged = merged.loc[merged["Team_x"] != merged["Team_y"]]
-
-        idx_lst = list(
-            set(
-                merged[
-                    ["Champion_x_x", "Champion_y_x", "Champion_x_y", "Champion_y_y"]
-                ].itertuples(index=False)
+        stats = pd.DataFrame()
+        for role1, role2 in self.duo_list:
+            role1_df = self.merged.loc[self.merged["IngameRole"] == role1]
+            role2_df = self.merged.loc[self.merged["IngameRole"] == role2]
+            columns = ["Champion", "Team", "PlayerWin", "IngameRole", "GameId"]
+            merged = pd.merge(
+                role1_df[columns], role2_df[columns], how="inner", on=["GameId", "Team"]
             )
-        )
-        idx = pd.MultiIndex.from_tuples(
-            idx_lst, names=[f"{role1} 1", f"{role2} 1", f"{role1} 2", f"{role2} 2"]
-        )
-        columns = ["Games", "Win", "Loss", "WinRate"]
-        stats = pd.DataFrame(index=idx, columns=columns).sort_index()
-        stats[columns] = 0
+            merged = pd.merge(merged, merged, how="inner", on="GameId")
+            merged = merged.loc[merged["Team_x"] != merged["Team_y"]]
 
-        for champ1, champ2, champ3, champ4 in stats.index:
-            idx = (champ1, champ2, champ3, champ4)
-            df = merged.loc[
-                (merged["Champion_x_x"] == champ1)
-                & (merged["Champion_y_x"] == champ2)
-                & (merged["Champion_x_y"] == champ3)
-                & (merged["Champion_y_y"] == champ4)
-            ]
-            stats.loc[idx, "Games"] = df.shape[0]
-            stats.loc[idx, "Win"] = df.loc[df["PlayerWin_x_x"] == "Yes"].shape[0]
-            stats.loc[idx, "Loss"] = df.loc[df["PlayerWin_x_x"] == "No"].shape[0]
+            idx_lst = list(
+                set(
+                    merged[
+                        ["Champion_x_x", "Champion_y_x", "Champion_x_y", "Champion_y_y"]
+                    ].itertuples(index=False)
+                )
+            )
+            idx = pd.MultiIndex.from_tuples(
+                idx_lst, names=["Champion 1", "Champion 2", "Champion 3", "Champion 4"]
+            )
+            columns = ["Position 1", "Position 2", "Games", "Win", "Loss", "WinRate"]
+            _stats = pd.DataFrame(index=idx, columns=columns).sort_index()
+            _stats["Position 1"] = role1
+            _stats["Position 2"] = role2
+            _stats[columns[2:]] = 0
+
+            for champ1, champ2, champ3, champ4 in _stats.index:
+                idx = (champ1, champ2, champ3, champ4)
+                df = merged.loc[
+                    (merged["Champion_x_x"] == champ1)
+                    & (merged["Champion_y_x"] == champ2)
+                    & (merged["Champion_x_y"] == champ3)
+                    & (merged["Champion_y_y"] == champ4)
+                ]
+                _stats.loc[idx, "Games"] = df.shape[0]
+                _stats.loc[idx, "Win"] = df.loc[df["PlayerWin_x_x"] == "Yes"].shape[0]
+                _stats.loc[idx, "Loss"] = df.loc[df["PlayerWin_x_x"] == "No"].shape[0]
+            stats = pd.concat([stats, _stats])
+        stats.sort_index(inplace=True)
         stats["WinRate"] = stats["Win"].divide(stats["Games"])
 
         return stats
@@ -896,7 +929,7 @@ def main():
     sheet.connect_sheet()
 
     scoreboard_games, scoreboard_players = select_options()
-    role1, role2 = select_roles(scoreboard_players)
+    # role1, role2 = select_roles(scoreboard_players)
 
     players_id = pd.read_csv("./csv/players_id.csv")
 
@@ -934,7 +967,7 @@ def main():
     print("Complete")
 
     print("Duo Stats ... ", end="")
-    duo_stats = stats.get_duo_champions_stats(role1, role2)
+    duo_stats = stats.get_duo_champions_stats()
     duo_stats.to_csv("./csv/stats/duo.csv")
     sheet.update_sheet("duo", duo_stats)
     print("Complete")
@@ -946,7 +979,7 @@ def main():
     print("Complete")
 
     print("Duo vs Stats ... ", end="")
-    duo_champions_vs_stats = stats.get_duo_champions_vs_stats(role1, role2)
+    duo_champions_vs_stats = stats.get_duo_champions_vs_stats()
     duo_champions_vs_stats.to_csv("./csv/stats/duo_champions_vs_stats.csv")
     sheet.update_sheet("duo_vs", duo_champions_vs_stats)
     print("Complete")
@@ -968,7 +1001,7 @@ def main():
     print("Complete")
 
     print("Duo player by champion stats ... ", end="")
-    duo_player_by_champion_stats = stats.get_duo_player_by_champion_stats(role1, role2)
+    duo_player_by_champion_stats = stats.get_duo_player_by_champion_stats()
     duo_player_by_champion_stats.to_csv(
         "./csv/stats/duo_player_by_champion.csv", index=False
     )
@@ -977,7 +1010,7 @@ def main():
     )
     print("Complete")
 
-    print("Players by position stats")
+    print("Players by position stats ... ", end="")
     players_by_position_stats = stats.get_players_by_position_stats()
     players_by_position_stats.to_csv("./csv/stats/players_by_position.csv")
     sheet.update_sheet("players_by_position", players_by_position_stats)
