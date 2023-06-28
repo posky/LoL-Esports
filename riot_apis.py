@@ -1,33 +1,40 @@
-import pprint
+import os
 import requests
+from pprint import pprint
 from urllib.parse import urljoin
+import logging
 
 import pandas as pd
 
-
-PLATFORM_KR_HOST = "https://kr.api.riotgames.com"
-REGION_ASIA_HOST = "https://asia.api.riotgames.com"
+DIR_PATH = "./csv/solo_rank"
 
 
 class RiotAPI:
-    def __init__(self, api_key=None):
+    HOST_URL = "https://{}.api.riotgames.com"
+
+    def __init__(self, api_key=None, platform="kr", region="asia"):
+        logging.info("RiotAPI created.")
         if api_key is None:
             with open("./riot_api_key.txt", "r") as f:
                 api_key = f.read().strip()
         self.headers = {"X-Riot-Token": api_key}
+        self.platform_host = self.HOST_URL.format(platform)
+        self.region_host = self.HOST_URL.format(region)
         self.summoner = self.Summoner(self)
         self.match = self.Match(self)
 
     def get_data(self, url):
         response = requests.get(url, headers=self.headers)
-        return response
+        if response.status_code != 200:
+            raise Exception(response.status_code)
+        return response.json()
 
-    def get_data_platform(self, endpoint):
-        url = urljoin(PLATFORM_KR_HOST, endpoint)
+    def get_data_by_platform(self, endpoint):
+        url = urljoin(self.platform_host, endpoint)
         return self.get_data(url)
 
-    def get_data_region(self, endpoint):
-        url = urljoin(REGION_ASIA_HOST, endpoint)
+    def get_data_by_region(self, endpoint):
+        url = urljoin(self.region_host, endpoint)
         return self.get_data(url)
 
     class Summoner:
@@ -35,21 +42,17 @@ class RiotAPI:
             self.url = "/lol/summoner/v4/summoners/"
             self.riot_api = riot_api
 
-        def by_account(self, account_id):
+        def by_account_id(self, account_id):
             endpoint = self.url + f"by-account/{account_id}"
-            return self.riot_api.get_data_platform(endpoint)
+            return self.riot_api.get_data_by_platform(endpoint)
 
-        def by_summoner_id(self, summoner_id):
-            endpoint = self.url + f"{summoner_id}"
-            return self.riot_api.get_data_platform(endpoint)
-
-        def by_name(self, name):
-            endpoint = self.url + f"by-name/{name}"
-            return self.riot_api.get_data_platform(endpoint)
+        def by_name(self, summoner_name):
+            endpoint = self.url + f"by-name/{summoner_name}"
+            return self.riot_api.get_data_by_platform(endpoint)
 
         def by_puuid(self, puuid):
             endpoint = self.url + f"by-puuid/{puuid}"
-            return self.riot_api.get_data_platform(endpoint)
+            return self.riot_api.get_data_by_platform(endpoint)
 
     class Match:
         def __init__(self, riot_api):
@@ -58,111 +61,91 @@ class RiotAPI:
 
         def by_match_id(self, match_id):
             endpoint = self.url + f"{match_id}"
-            return self.riot_api.get_data_region(endpoint)
+            return self.riot_api.get_data_by_region(endpoint)
 
         def ids_by_puuid(self, puuid):
             endpoint = self.url + f"by-puuid/{puuid}/ids"
-            return self.riot_api.get_data_region(endpoint)
+            return self.riot_api.get_data_by_region(endpoint)
 
         def timeline_by_match_id(self, match_id):
             endpoint = self.url + f"{match_id}/timeline"
-            return self.riot_api.get_data_region(endpoint)
+            return self.riot_api.get_data_by_region(endpoint)
 
 
-def rename_summoner_columns(summoner):
-    summoner["account_id"] = summoner.pop("accountId")
-    summoner["profile_icon_id"] = summoner.pop("profileIconId")
-    summoner["revision_date"] = summoner.pop("revisionDate")
-    summoner["summoner_level"] = summoner.pop("summonerLevel")
+def get_latest_matches_by_name(riot_api, name):
+    _summoner = riot_api.summoner.by_name(name)
+    summoner = pd.DataFrame([_summoner])
+
+    metadata = pd.DataFrame()
+    info = pd.DataFrame()
+    teams = pd.DataFrame()
+    participants = pd.DataFrame()
+    challenges = pd.DataFrame()
+    perks = pd.DataFrame()
+
+    match_ids = riot_api.match.ids_by_puuid(summoner["puuid"].iloc[0])
+    for match_id in match_ids:
+        match_data = riot_api.match.by_match_id(match_id)
+        metadata = pd.concat([metadata, pd.DataFrame(match_data["metadata"])])
+        _info = match_data["info"]
+        _info["matchId"] = match_id
+        _participants = _info.pop("participants")
+        _teams = _info.pop("teams")
+        for _t in _teams:
+            _t["matchId"] = match_id
+        info = pd.concat([info, pd.DataFrame([_info])])
+        teams = pd.concat([teams, pd.DataFrame(_teams)])
+
+        _challenges = []
+        _perks = []
+        for _part in _participants:
+            _challenges.append(_part.pop("challenges"))
+            _perks.append(_part.pop("perks"))
+            _part["matchId"] = match_id
+
+            _challenges[-1]["matchId"] = match_id
+            _challenges[-1]["puuid"] = _part["puuid"]
+            _perks[-1]["matchId"] = match_id
+            _perks[-1]["puuid"] = _part["puuid"]
+        participants = pd.concat([participants, pd.DataFrame(_participants)])
+        challenges = pd.concat([challenges, pd.DataFrame(_challenges)])
+        perks = pd.concat([perks, pd.DataFrame(_perks)])
+
+    metadata.reset_index(drop=True, inplace=True)
+    info.reset_index(drop=True, inplace=True)
+    teams.reset_index(drop=True, inplace=True)
+    participants.reset_index(drop=True, inplace=True)
+    challenges.reset_index(drop=True, inplace=True)
+    perks.reset_index(drop=True, inplace=True)
+
+    return metadata, info, teams, participants, challenges, perks
 
 
-def add_summoner(summoner, player_name):
-    players_id = pd.read_csv("./csv/players_id.csv")
-    summoners = pd.read_csv("./csv/solo_rank/summoners.csv")
-
-    player_id = players_id.loc[players_id["player"] == player_name, "player_id"].iloc[0]
-    summoner["player_id"] = player_id
-    rename_summoner_columns(summoner)
-
-    df = summoners.loc[summoners["puuid"] == summoner["puuid"]]
-    if df.shape[0] == 0:
-        summoners = pd.concat([summoners, pd.DataFrame(data=[summoner])])
-        summoners.to_csv("./csv/solo_rank/summoners.csv", index=False)
-        print(f'Added new summoners ({player_name}, {summoner["name"]})')
-    elif df["revision_date"].iloc[0] != summoner["revision_date"]:
-        summoners.loc[summoners["puuid"] == summoner["puuid"]] = pd.DataFrame(
-            data=[summoner]
-        )
-        summoners.to_csv("./csv/solo_rank/summoners.csv", index=False)
-        print(f'Updated summoner ({player_name}, {summoner["name"]})')
+def save_to_csv(df, file_name):
+    file_path = os.path.join(DIR_PATH, file_name)
+    if os.path.isfile(file_path):
+        original = pd.read_csv(file_path)
     else:
-        print(f'Already exist summoner ({player_name}, {summoner["name"]})')
-
-
-def update_summoners():
-    players_id = pd.read_csv("./csv/players_id.csv")
-    summoners = pd.read_csv("./csv/solo_rank/summoners.csv")
-    for puuid in summoners["puuid"]:
-        row = summoners.loc[summoners["puuid"] == puuid]
-        summoner = get_summoner_by_puuid(puuid)
-        rename_summoner_columns(summoner)
-
-        if row["revision_date"].iloc[0] != summoner["revision_date"]:
-            for key, value in summoner.items():
-                row[key] = value
-            player_name = players_id.loc[
-                players_id["player_id"] == row["player_id"].iloc[0], "player"
-            ].iloc[0]
-            print(f'Updated summoner ({player_name}, {row["name"]}')
-
-
-def update_matches_id():
-    summoners = pd.read_csv("./csv/solo_rank/summoners.csv")
-    matches_id = pd.read_csv("./csv/solo_rank/matches_id.csv")
-
-    for puuid in summoners["puuid"]:
-        match_id_lst = get_matches_id_by_puuid(puuid)
-        new_matches_id = []
-        for match_id in match_id_lst:
-            df = matches_id.loc[
-                (matches_id["puuid"] == puuid) & (matches_id["match_id"] == match_id)
-            ]
-            if df.shape[0] == 0:
-                new_matches_id.append(match_id)
-        df = pd.DataFrame(
-            data={"puuid": [puuid] * len(new_matches_id), "match_id": new_matches_id}
-        )
-        matches_id = pd.concat([matches_id, df], ignore_index=True)
-        matches_id.to_csv("./csv/solo_rank/matches_id.csv", index=False)
-        print(f"Updated {df.shape[0]} matches ({puuid})")
-
-
-def match_analysis(match):
-    match_id = match["metadata"]["matchId"]
-    match_metadata = match["metadata"]
-    match_info = match["info"]
-    match_participants = match_info["participants"]
-
-
-def handling_exception(target, content=""):
-    if target.status_code != 200:
-        raise Exception(content)
-
-    return target.json()
+        original = pd.DataFrame()
+    new_df = pd.concat([original, df])
+    new_df.to_csv(file_path, index=False)
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
+
     riot_api = RiotAPI()
-    summoner = riot_api.summoner.by_name("hide on bush")
-    summoner = handling_exception(summoner, "summoner")
 
-    match_ids = riot_api.match.ids_by_puuid(summoner["puuid"])
-    match_ids = handling_exception(match_ids, "match ids")
+    metadata, info, teams, participants, challenges, perks = get_latest_matches_by_name(
+        riot_api, "hide on bush"
+    )
 
-    match_id = match_ids[0]
-    match = riot_api.match.by_match_id(match_id)
-    match = handling_exception(match, "match")
-    print(match)
+    save_to_csv(metadata, "metadata.csv")
+    save_to_csv(info, "info.csv")
+    save_to_csv(teams, "teams.csv")
+    save_to_csv(participants, "participants.csv")
+    save_to_csv(challenges, "challenges.csv")
+    save_to_csv(perks, "perks.csv")
 
 
 if __name__ == "__main__":
