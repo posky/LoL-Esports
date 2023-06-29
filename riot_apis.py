@@ -5,6 +5,8 @@ from urllib.parse import urljoin
 import logging
 
 import pandas as pd
+from ratelimit import limits, sleep_and_retry
+
 
 DIR_PATH = "./csv/solo_rank"
 
@@ -23,6 +25,8 @@ class RiotAPI:
         self.summoner = self.Summoner(self)
         self.match = self.Match(self)
 
+    @sleep_and_retry
+    @limits(calls=100, period=120)
     def get_data(self, url):
         response = requests.get(url, headers=self.headers)
         if response.status_code != 200:
@@ -72,6 +76,62 @@ class RiotAPI:
             return self.riot_api.get_data_by_region(endpoint)
 
 
+def get_dataframe_from_csv(file_name, columns=[]):
+    file_path = os.path.join(DIR_PATH, file_name)
+    if os.path.isfile(file_path):
+        df = pd.read_csv(file_path)
+    else:
+        df = pd.DataFrame(columns=columns)
+    return df
+
+
+def update_summoner(
+    summoner: dict, summoners_df: pd.DataFrame = None, save: bool = False
+):
+    if summoners_df is None:
+        summoners_df = get_dataframe_from_csv("summoners.csv")
+    cond = summoners_df["puuid"] == summoner["puuid"]
+    df = summoners_df.loc[cond]
+    if df.shape[0] == 0:
+        summoners_df = pd.concat([summoners_df, pd.DataFrame([summoner])])
+    elif df["revisionDate"].iloc[0] < summoner["revisionDate"]:
+        logging.info("Updated summoner %s / %s", summoner["name"], summoner["puuid"])
+        summoners_df.loc[cond, summoner.keys()] = summoner.values()
+    if save:
+        save_to_csv(summoners_df, "summoners.csv")
+    return summoners_df
+
+
+def update_summoners(riot_api):
+    summoners = get_dataframe_from_csv("summoners.csv")
+
+    for i in range(summoners.shape[0]):
+        summoner = riot_api.summoner.by_puuid(summoners["puuid"].iloc[i])
+        summoners = update_summoner(summoner, summoners)
+    save_to_csv(summoners, "summoners.csv")
+
+
+def update_match_ids(riot_api):
+    summoners = get_dataframe_from_csv("summoners.csv", ["puuid"])
+    match_ids_df = get_dataframe_from_csv("match_ids.csv", ["matchId"])
+
+    new_match_ids = []
+    for row in summoners.itertuples():
+        match_ids = riot_api.match.ids_by_puuid(row.puuid)
+        ids = [
+            match_id
+            for match_id in match_ids
+            if match_id not in match_ids_df["matchId"].values
+        ]
+        logging.info("%s / %s: %d matches", row.name, row.puuid, len(ids))
+        new_match_ids += ids
+
+    new_match_ids = list(set(new_match_ids))
+    new_match_ids_df = pd.DataFrame(new_match_ids, columns=["matchId"])
+    match_ids_df = pd.concat([match_ids_df, new_match_ids_df])
+    save_to_csv(match_ids_df, "match_ids.csv")
+
+
 def get_latest_matches_by_name(riot_api, name):
     _summoner = riot_api.summoner.by_name(name)
     summoner = pd.DataFrame([_summoner])
@@ -118,12 +178,12 @@ def get_latest_matches_by_name(riot_api, name):
     challenges.reset_index(drop=True, inplace=True)
     perks.reset_index(drop=True, inplace=True)
 
-    return metadata, info, teams, participants, challenges, perks
+    return summoner, metadata, info, teams, participants, challenges, perks
 
 
-def save_to_csv(df, file_name):
+def save_to_csv(df, file_name, concat=False):
     file_path = os.path.join(DIR_PATH, file_name)
-    if os.path.isfile(file_path):
+    if concat == True and os.path.isfile(file_path):
         original = pd.read_csv(file_path)
     else:
         original = pd.DataFrame()
@@ -136,16 +196,8 @@ def main():
 
     riot_api = RiotAPI()
 
-    metadata, info, teams, participants, challenges, perks = get_latest_matches_by_name(
-        riot_api, "hide on bush"
-    )
-
-    save_to_csv(metadata, "metadata.csv")
-    save_to_csv(info, "info.csv")
-    save_to_csv(teams, "teams.csv")
-    save_to_csv(participants, "participants.csv")
-    save_to_csv(challenges, "challenges.csv")
-    save_to_csv(perks, "perks.csv")
+    update_summoners(riot_api)
+    update_match_ids(riot_api)
 
 
 if __name__ == "__main__":
