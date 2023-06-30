@@ -86,7 +86,9 @@ def get_dataframe_from_csv(file_name, columns=[]):
 
 
 def update_summoner(
-    summoner: dict, summoners_df: pd.DataFrame = None, save: bool = False
+    summoner: dict,
+    summoners_df: pd.DataFrame = None,
+    save: bool = False,
 ):
     if summoners_df is None:
         summoners_df = get_dataframe_from_csv("summoners.csv")
@@ -130,6 +132,52 @@ def update_match_ids(riot_api):
     new_match_ids_df = pd.DataFrame(new_match_ids, columns=["matchId"])
     match_ids_df = pd.concat([match_ids_df, new_match_ids_df])
     save_to_csv(match_ids_df, "match_ids.csv")
+
+
+def update_match_data(riot_api, match_id):
+    match_data = riot_api.match.by_match_id(match_id)
+    metadata = pd.DataFrame(match_data["metadata"])
+    _info = match_data["info"]
+    _info["matchId"] = match_id
+    _participants = _info.pop("participants")
+    _teams = _info.pop("teams")
+    for _t in _teams:
+        _t["matchId"] = match_id
+    info = pd.DataFrame([_info])
+    teams = pd.DataFrame(_teams)
+
+    _challenges = []
+    _perks = []
+    for _part in _participants:
+        _challenges.append(_part.pop("challenges"))
+        _perks.append(_part.pop("perks"))
+        _part["matchId"] = match_id
+
+        _challenges[-1]["matchId"] = match_id
+        _challenges[-1]["puuid"] = _part["puuid"]
+        _perks[-1]["matchId"] = match_id
+        _perks[-1]["puuid"] = _part["puuid"]
+    participants = pd.DataFrame(_participants)
+    challenges = pd.DataFrame(_challenges)
+    perks = pd.DataFrame(_perks)
+
+    logging.info("Updated %s match data", match_id)
+
+    save_to_csv(metadata, "metadata.csv", concat=True)
+    save_to_csv(info, "info.csv", concat=True)
+    save_to_csv(teams, "teams.csv", concat=True)
+    save_to_csv(participants, "participants.csv", concat=True)
+    save_to_csv(challenges, "challenges.csv", concat=True)
+    save_to_csv(perks, "perks.csv", concat=True)
+
+
+def update_matches_data(riot_api):
+    match_ids_df = get_dataframe_from_csv("match_ids.csv", ["matchId"])
+    participants = get_dataframe_from_csv("participants.csv", ["matchId"])
+
+    for match_id in match_ids_df["matchId"].unique():
+        if match_id not in participants["matchId"].values:
+            update_match_data(riot_api, match_id)
 
 
 def get_latest_matches_by_name(riot_api, name):
@@ -198,6 +246,7 @@ def main():
 
     update_summoners(riot_api)
     update_match_ids(riot_api)
+    update_matches_data(riot_api)
 
 
 if __name__ == "__main__":
