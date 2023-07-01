@@ -85,6 +85,12 @@ def get_dataframe_from_csv(file_name, columns=[]):
     return df
 
 
+def add_summoner(riot_api, name: str, player: str):
+    summoner = riot_api.summoner.by_name(name)
+    summoner["player"] = player
+    update_summoner(summoner, save=True)
+
+
 def update_summoner(
     summoner: dict,
     summoners_df: pd.DataFrame = None,
@@ -95,9 +101,10 @@ def update_summoner(
     cond = summoners_df["puuid"] == summoner["puuid"]
     df = summoners_df.loc[cond]
     if df.shape[0] == 0:
+        logging.info("Added summoner %s (%s)", summoner["name"], summoner["player"])
         summoners_df = pd.concat([summoners_df, pd.DataFrame([summoner])])
     elif df["revisionDate"].iloc[0] < summoner["revisionDate"]:
-        logging.info("Updated summoner %s / %s", summoner["name"], summoner["puuid"])
+        logging.info("Updated summoner %s (%s)", summoner["name"], summoner["player"])
         summoners_df.loc[cond, summoner.keys()] = summoner.values()
     if save:
         save_to_csv(summoners_df, "summoners.csv")
@@ -125,7 +132,7 @@ def update_match_ids(riot_api):
             for match_id in match_ids
             if match_id not in match_ids_df["matchId"].values
         ]
-        logging.info("%s / %s: %d matches", row.name, row.puuid, len(ids))
+        logging.info("%s (%s): %d matches", row.name, row.player, len(ids))
         new_match_ids += ids
 
     new_match_ids = list(set(new_match_ids))
