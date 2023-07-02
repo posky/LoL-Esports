@@ -116,6 +116,7 @@ def update_summoners(riot_api):
 
     for i in range(summoners.shape[0]):
         summoner = riot_api.summoner.by_puuid(summoners["puuid"].iloc[i])
+        summoner["player"] = summoners["player"].iloc[i]
         summoners = update_summoner(summoner, summoners)
     save_to_csv(summoners, "summoners.csv")
 
