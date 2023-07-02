@@ -397,6 +397,36 @@ def select_page():
     return pages[number]
 
 
+def select_match_options(league):
+    rest_teams = []
+    for match in league.matches:
+        if match.team1_score == match.team2_score == 0:
+            rest_teams += [match.team1, match.team2]
+    rest_teams = sorted(list(set(rest_teams)))
+
+    while len(rest_teams) > 0:
+        print()
+        for i, team in enumerate(rest_teams):
+            print(f"{i}: {team}")
+        number = input("Input team number: ")
+        if number != "":
+            number = int(number)
+            assert 0 <= number < len(rest_teams)
+            win_loss_option = int(input("Input 0 for win, 1 for loss: "))
+            assert win_loss_option in [0, 1]
+            team_name = rest_teams.pop(number)
+
+            for match in league.matches:
+                if match.winner != 0:
+                    continue
+                if match.team1 == team_name:
+                    match.set_match(-win_loss_option)
+                elif match.team2 == team_name:
+                    match.set_match(-(1 - win_loss_option))
+        else:
+            break
+
+
 def main():
     page = select_page()
     update_matches_to_csv(page)
@@ -424,6 +454,8 @@ def main():
             row.BestOf,
         )
         league.add_match(match)
+
+    select_match_options(league)
 
     league.proceed_matches()
 
