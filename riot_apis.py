@@ -247,6 +247,35 @@ def save_to_csv(df, file_name, concat=False):
     new_df.to_csv(file_path, index=False)
 
 
+def select_patch():
+    summoners = pd.read_csv("./csv/solo_rank/summoners.csv")
+    info = pd.read_csv("./csv/solo_rank/info.csv")
+    participants = pd.read_csv("./csv/solo_rank/participants.csv")
+
+    merged = pd.merge(
+        summoners[["puuid", "player"]],
+        pd.merge(
+            info.loc[info["gameMode"] == "CLASSIC", ["matchId", "gameVersion"]],
+            participants,
+            how="inner",
+            on="matchId",
+        ),
+        how="inner",
+        on="puuid",
+    )
+
+    patch = input("Patch_version: ")
+    if patch != "":
+        patch_versions = patch.split(" ")
+        merged = merged.loc[
+            merged["gameVersion"]
+            .str.split(".")
+            .apply(lambda x: ".".join(x[:2]))
+            .isin(patch_versions)
+        ]
+    return merged
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
 
@@ -255,6 +284,8 @@ def main():
     update_summoners(riot_api)
     update_match_ids(riot_api)
     update_matches_data(riot_api)
+
+    merged = select_patch()
 
 
 if __name__ == "__main__":
