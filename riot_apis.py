@@ -1,11 +1,10 @@
 import os
 import requests
-from pprint import pprint
-from urllib.parse import urljoin
 import logging
 
 import pandas as pd
 from ratelimit import limits, sleep_and_retry
+from furl import furl
 
 
 DIR_PATH = "./csv/solo_rank"
@@ -26,20 +25,24 @@ class RiotAPI:
         self.match = self.Match(self)
 
     @sleep_and_retry
-    @limits(calls=100, period=120)
+    @limits(calls=100, period=125)
     def get_data(self, url):
         response = requests.get(url, headers=self.headers)
         if response.status_code != 200:
-            raise Exception(response.status_code)
+            raise Exception(f"API response: {response.status_code}")
         return response.json()
 
-    def get_data_by_platform(self, endpoint):
-        url = urljoin(self.platform_host, endpoint)
-        return self.get_data(url)
+    def get_data_by_platform(self, url_contents):
+        url = furl(self.platform_host)
+        url /= url_contents.get("path", "")
+        url.add(args=url_contents.get("query", {}))
+        return self.get_data(url.url)
 
-    def get_data_by_region(self, endpoint):
-        url = urljoin(self.region_host, endpoint)
-        return self.get_data(url)
+    def get_data_by_region(self, url_contents):
+        url = furl(self.region_host)
+        url /= url_contents.get("path", "")
+        url.add(args=url_contents.get("query", {}))
+        return self.get_data(url.url)
 
     class Summoner:
         def __init__(self, riot_api):
@@ -48,15 +51,18 @@ class RiotAPI:
 
         def by_account_id(self, account_id):
             endpoint = self.url + f"by-account/{account_id}"
-            return self.riot_api.get_data_by_platform(endpoint)
+            url_contents = {"path": endpoint}
+            return self.riot_api.get_data_by_platform(url_contents)
 
         def by_name(self, summoner_name):
             endpoint = self.url + f"by-name/{summoner_name}"
-            return self.riot_api.get_data_by_platform(endpoint)
+            url_contents = {"path": endpoint}
+            return self.riot_api.get_data_by_platform(url_contents)
 
         def by_puuid(self, puuid):
             endpoint = self.url + f"by-puuid/{puuid}"
-            return self.riot_api.get_data_by_platform(endpoint)
+            url_contents = {"path": endpoint}
+            return self.riot_api.get_data_by_platform(url_contents)
 
     class Match:
         def __init__(self, riot_api):
@@ -65,15 +71,18 @@ class RiotAPI:
 
         def by_match_id(self, match_id):
             endpoint = self.url + f"{match_id}"
-            return self.riot_api.get_data_by_region(endpoint)
+            url_contents = {"path": endpoint}
+            return self.riot_api.get_data_by_region(url_contents)
 
-        def ids_by_puuid(self, puuid):
+        def ids_by_puuid(self, puuid, **kwargs):
             endpoint = self.url + f"by-puuid/{puuid}/ids"
-            return self.riot_api.get_data_by_region(endpoint)
+            url_contents = {"path": endpoint, "query": kwargs}
+            return self.riot_api.get_data_by_region(url_contents)
 
         def timeline_by_match_id(self, match_id):
             endpoint = self.url + f"{match_id}/timeline"
-            return self.riot_api.get_data_by_region(endpoint)
+            url_contents = {"path": endpoint}
+            return self.riot_api.get_data_by_region(url_contents)
 
 
 def get_dataframe_from_csv(file_name, columns=[]):
@@ -127,7 +136,7 @@ def update_match_ids(riot_api):
 
     new_match_ids = []
     for row in summoners.itertuples():
-        match_ids = riot_api.match.ids_by_puuid(row.puuid)
+        match_ids = riot_api.match.ids_by_puuid(row.puuid, count=100)
         ids = [
             match_id
             for match_id in match_ids
@@ -157,14 +166,15 @@ def update_match_data(riot_api, match_id):
     _challenges = []
     _perks = []
     for _part in _participants:
-        _challenges.append(_part.pop("challenges"))
-        _perks.append(_part.pop("perks"))
+        if "challenges" in _part:
+            _challenges.append(_part.pop("challenges"))
+            _challenges[-1]["matchId"] = match_id
+            _challenges[-1]["puuid"] = _part["puuid"]
+        if "perks" in _part:
+            _perks.append(_part.pop("perks"))
+            _perks[-1]["matchId"] = match_id
+            _perks[-1]["puuid"] = _part["puuid"]
         _part["matchId"] = match_id
-
-        _challenges[-1]["matchId"] = match_id
-        _challenges[-1]["puuid"] = _part["puuid"]
-        _perks[-1]["matchId"] = match_id
-        _perks[-1]["puuid"] = _part["puuid"]
     participants = pd.DataFrame(_participants)
     challenges = pd.DataFrame(_challenges)
     perks = pd.DataFrame(_perks)
