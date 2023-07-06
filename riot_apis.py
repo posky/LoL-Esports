@@ -237,14 +237,14 @@ def get_latest_matches_by_name(riot_api, name):
     return summoner, metadata, info, teams, participants, challenges, perks
 
 
-def save_to_csv(df, file_name, concat=False):
+def save_to_csv(df, file_name, concat=False, index=False):
     file_path = os.path.join(DIR_PATH, file_name)
     if concat == True and os.path.isfile(file_path):
         original = pd.read_csv(file_path)
     else:
         original = pd.DataFrame()
     new_df = pd.concat([original, df])
-    new_df.to_csv(file_path, index=False)
+    new_df.to_csv(file_path, index=index)
 
 
 def select_patch():
@@ -252,10 +252,11 @@ def select_patch():
     info = pd.read_csv("./csv/solo_rank/info.csv")
     participants = pd.read_csv("./csv/solo_rank/participants.csv")
 
+    cond = (info["gameMode"] == "CLASSIC") & (info["gameDuration"] >= 4 * 60)
     merged = pd.merge(
         summoners[["puuid", "player"]],
         pd.merge(
-            info.loc[info["gameMode"] == "CLASSIC", ["matchId", "gameVersion"]],
+            info.loc[cond],
             participants,
             how="inner",
             on="matchId",
@@ -273,7 +274,26 @@ def select_patch():
             .apply(lambda x: ".".join(x[:2]))
             .isin(patch_versions)
         ]
+    logging.info("%d data", merged.shape[0])
     return merged
+
+
+def get_stats(matches_data):
+    grouped = matches_data.groupby(["player", "teamPosition", "championName"])
+    stats = pd.DataFrame(
+        columns=["games", "win", "loss", "winrate", "kills", "deaths", "assists", "kda"]
+    )
+
+    stats["games"] = grouped["championId"].count()
+    stats["win"] = grouped["win"].sum()
+    stats["loss"] = stats["games"] - stats["win"]
+    stats["winrate"] = stats["win"].divide(stats["games"])
+    stats[["kills", "deaths", "assists"]] = grouped[
+        ["kills", "deaths", "assists"]
+    ].mean()
+    stats["kda"] = stats[["kills", "assists"]].sum(axis=1).divide(stats["deaths"])
+
+    return stats
 
 
 def main():
@@ -286,6 +306,8 @@ def main():
     update_matches_data(riot_api)
 
     merged = select_patch()
+    stats = get_stats(merged)
+    save_to_csv(stats, "stats.csv", index=True)
 
 
 if __name__ == "__main__":
