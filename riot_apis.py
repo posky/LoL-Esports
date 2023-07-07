@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+from datetime import datetime
 
 import pandas as pd
 from ratelimit import limits, sleep_and_retry
@@ -255,9 +256,10 @@ def save_to_csv(df, file_name, concat=False, index=False):
         original = pd.DataFrame()
     new_df = pd.concat([original, df])
     new_df.to_csv(file_path, index=index)
+    logging.info("Saved %s (concat: %s, index: %s)", file_name, concat, index)
 
 
-def select_patch():
+def select_options():
     summoners = pd.read_csv("./csv/solo_rank/summoners.csv")
     info = pd.read_csv("./csv/solo_rank/info.csv")
     participants = pd.read_csv("./csv/solo_rank/participants.csv")
@@ -284,11 +286,27 @@ def select_patch():
             .apply(lambda x: ".".join(x[:2]))
             .isin(patch_versions)
         ]
+
     logging.info("%d data", merged.shape[0])
+
+    days = input("Days: ")
+    if days != "":
+        days = int(days)
+        date_now = datetime.now()
+        merged = merged.loc[
+            merged["gameCreation"].apply(
+                lambda x: (date_now - datetime.fromtimestamp(x / 1000)).days <= days
+            )
+        ]
+
+    logging.info("%d data", merged.shape[0])
+
     return merged
 
 
 def get_stats(matches_data):
+    assert matches_data.shape[0] > 0
+
     grouped = matches_data.groupby(["player", "teamPosition", "championName"])
     stats = pd.DataFrame(
         columns=["games", "win", "loss", "winrate", "kills", "deaths", "assists", "kda"]
@@ -303,6 +321,8 @@ def get_stats(matches_data):
     ].mean()
     stats["kda"] = stats[["kills", "assists"]].sum(axis=1).divide(stats["deaths"])
 
+    logging.info("Statistics completed")
+
     return stats
 
 
@@ -315,7 +335,7 @@ def main():
     update_match_ids(riot_api)
     update_matches_data(riot_api)
 
-    merged = select_patch()
+    merged = select_options()
     stats = get_stats(merged)
     save_to_csv(stats, "stats.csv", index=True)
 
