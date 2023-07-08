@@ -194,9 +194,12 @@ def update_matches_data(riot_api):
     match_ids_df = get_dataframe_from_csv("match_ids.csv", ["matchId"])
     participants = get_dataframe_from_csv("participants.csv", ["matchId"])
 
+    count = 0
     for match_id in match_ids_df["matchId"].unique():
         if match_id not in participants["matchId"].values:
             update_match_data(riot_api, match_id)
+            count += 1
+    logging.info("Updated %d matches", count)
 
 
 def get_latest_matches_by_name(riot_api, name):
