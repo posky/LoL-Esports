@@ -8,12 +8,13 @@ from typing import List
 import pandas as pd
 from tqdm import tqdm
 
+from lol_fandom import set_default_delay
 from lol_fandom import get_leagues, get_tournaments
 from lol_fandom import get_scoreboard_games, get_scoreboard_players
 from lol_fandom import get_tournament_rosters, get_match_schedule
 
 pd.set_option("display.max_columns", None)
-# set_default_delay(0.5)
+set_default_delay(0.2)
 
 
 def change_to_tuple(lst: List[str]) -> str:
@@ -245,7 +246,7 @@ def check_new_team():
                 names = sorted(names, key=lambda x: x.lower())
                 break
         if len(names) > 0:
-            url = f'https://lol.fandom.com/wiki/{page.replace(" ", ")")}'
+            url = f'https://lol.fandom.com/wiki/{page.replace(" ", "_")}'
             webbrowser.open(url)
             print(url)
             print(f"{page}\n{names}")
@@ -267,9 +268,6 @@ def main():
     parse_scoreboard_players(start=2023)
     # parse_tournament_rosters(start=2023)
     # parse_matches_schedule(start=2023)
-
-    # Check new teams and players
-    check_new_team()
 
 
 if __name__ == "__main__":
