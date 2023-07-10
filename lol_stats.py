@@ -929,7 +929,6 @@ def main():
     sheet.connect_sheet()
 
     scoreboard_games, scoreboard_players = select_options()
-    # role1, role2 = select_roles(scoreboard_players)
 
     players_id = pd.read_csv("./csv/players_id.csv")
 
