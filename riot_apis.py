@@ -323,6 +323,7 @@ def get_stats(matches_data):
         ["kills", "deaths", "assists"]
     ].mean()
     stats["kda"] = stats[["kills", "assists"]].sum(axis=1).divide(stats["deaths"])
+    stats["gameDuration"] = grouped["gameDuration"].mean() / 60
 
     logging.info("Statistics completed")
 
