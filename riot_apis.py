@@ -310,6 +310,10 @@ def select_options():
 def get_stats(matches_data):
     assert matches_data.shape[0] > 0
 
+    matches_data["dpm"] = matches_data["totalDamageDealtToChampions"].divide(
+        matches_data["gameDuration"] / 60
+    )
+
     grouped = matches_data.groupby(["player", "teamPosition", "championName"])
     stats = pd.DataFrame(
         columns=["games", "win", "loss", "winrate", "kills", "deaths", "assists", "kda"]
@@ -324,6 +328,7 @@ def get_stats(matches_data):
     ].mean()
     stats["kda"] = stats[["kills", "assists"]].sum(axis=1).divide(stats["deaths"])
     stats["gameDuration"] = grouped["gameDuration"].mean() / 60
+    stats["dpm"] = grouped["dpm"].mean()
 
     logging.info("Statistics completed")
 
