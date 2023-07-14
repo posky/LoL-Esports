@@ -33,7 +33,7 @@ def create_html_table(ratings):
         <tr>
             <td>{}</td>
             <td>{}</td>
-            <td>{}td>
+            <td>{}</td>
             <td>{}</td>
             <td>{}</td>
             <td>{}</td>
