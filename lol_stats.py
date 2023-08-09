@@ -778,7 +778,10 @@ def parse_years(years):
 
 def parse_leagues(leagues):
     candidate_leagues = ["LCK", "LPL", "LEC", "LCS", "WCS", "MSI"]
-    mapping = lambda x: candidate_leagues[x]
+
+    def mapping(x):
+        return candidate_leagues[x]
+
     if leagues == "":
         leagues = candidate_leagues.copy()
     elif " " in leagues:
