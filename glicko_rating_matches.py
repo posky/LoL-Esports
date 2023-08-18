@@ -1,14 +1,16 @@
-"""Glicko Rating System about LoLesports
-"""
+"""Glicko Rating System about LoLesports."""
+from __future__ import annotations
+
+import logging
+import math
 import os
 import sys
-import math
-import logging
+from datetime import datetime
+from typing import Self
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
 
 DEFAULT_POINT = 1500
 DEFAULT_RD = 350
@@ -16,13 +18,15 @@ DEFAULT_SIGMA = 0.6
 DEFAULT_TAU = 0.2
 CONVERT_VALUE = 173.7178
 
+START_YEAR = 2011
+
 
 class GlickoSystem:
-    """Glicko System"""
+    """Glicko System."""
 
     EPSILON = 0.000001
 
-    def __init__(self, tau=DEFAULT_TAU):
+    def __init__(self: Self, tau: float = DEFAULT_TAU) -> None:
         """GlickoSystem init.
 
         Args:
@@ -34,7 +38,7 @@ class GlickoSystem:
         """
         self.tau = tau
 
-    def calculate_g(self, pi):
+    def calculate_g(self: Self, pi: float) -> float:
         """Calculate g(pi).
 
         Args:
@@ -45,13 +49,20 @@ class GlickoSystem:
         """
         return 1 / math.sqrt(1 + 3 * pi**2 / math.pi**2)
 
-    def calculate_E(self, mu=None, op_mu=None, op_pi=None, g=None):
+    def calculate_E(
+        self: Self,
+        mu: float | None = None,
+        op_mu: float | None = None,
+        op_pi: float | None = None,
+        g: float | None = None,
+    ) -> float:
         """Calculate E(mu, op_mu, op_pi).
 
         Args:
             mu (float, optional): Converted my rating point. Defaults to None.
             op_mu (float, optional): Converted opponent rating point. Defaults to None.
-            op_pi (float, optional): Converted opponent rating deviation. Defaults to None.
+            op_pi (float, optional): Converted opponent rating deviation.
+                Defaults to None.
             g (float, optional): Calculated g(op_pi). Defaults to None.
 
         Returns:
@@ -63,14 +74,21 @@ class GlickoSystem:
             g = self.calculate_g(op_pi)
         return 1 / (1 + math.exp(-1 * g * (mu - op_mu)))
 
-    def calculate_v(self, mu=None, op_mu=None, op_pi=None, g=None, E=None):
-        """Calculate v. v is the estimated variance of the team's rating
-        based only on game outcome.
+    def calculate_v(
+        self: Self,
+        mu: float | None = None,
+        op_mu: float | None = None,
+        op_pi: float | None = None,
+        g: float | None = None,
+        E: float | None = None,
+    ) -> float:
+        """Calculate v.
 
         Args:
             mu (float, optional): Converted my rating point. Defaults to None.
             op_mu (float, optional): Converted opponent rating point. Defaults to None.
-            op_pi (float, optional): Converted opponent rating deviation. Defaults to None.
+            op_pi (float, optional): Converted opponent rating deviation.
+                Defaults to None.
             g (float, optional): Calculated g(op_pi). Defaults to None.
             E (float, optional): Calculated E(mu, op_mu, op_pi). Defaults to None.
 
@@ -86,17 +104,23 @@ class GlickoSystem:
         return 1 / g**2 * E * (1 - E)
 
     def calculate_delta(
-        self, outcome, mu=None, op_mu=None, op_pi=None, g=None, E=None, v=None
-    ):
-        """Calculate delta. delta is the estimated improvement in rating
-        by comparing the pre-period rating to the performance rating
-        based only on game outcome.
+        self: Self,
+        outcome: int,
+        mu: float | None = None,
+        op_mu: float | None = None,
+        op_pi: float | None = None,
+        g: float | None = None,
+        E: float | None = None,
+        v: float | None = None,
+    ) -> float:
+        """Calculate delta.
 
         Args:
             outcome (int): Outcome of match. 1 is win, 0 is loss.
             mu (float, optional): Converted my rating point. Defaults to None.
             op_mu (float, optional): Converted opponent rating point. Defaults to None.
-            op_pi (float, optional): Converted opponent rating deviation. Defaults to None.
+            op_pi (float, optional): Converted opponent rating deviation.
+                Defaults to None.
             g (float, optional): Calculated g(op_pi). Defaults to None.
             E (float, optional): Calculated E(mu, op_mu, op_pi). Defaults to None.
             v (float, optional): Calculated v. Defaults to None.
@@ -115,7 +139,9 @@ class GlickoSystem:
             v = self.calculate_v(g=g, E=E)
         return v * g * (outcome - E)
 
-    def calculate_f(self, x, pi, sigma, v, delta):
+    def calculate_f(
+        self: Self, x: float, pi: float, sigma: float, v: float, delta: float
+    ) -> float:
         """Calculate f(x).
 
         Args:
@@ -134,7 +160,7 @@ class GlickoSystem:
         right = (x - a) / self.tau**2
         return left - right
 
-    def calculate_new_sigma(self, team, v, delta):
+    def calculate_new_sigma(self: Self, team: Team, v: float, delta: float) -> float:
         """Calculate new sigma.
 
         Args:
@@ -170,7 +196,9 @@ class GlickoSystem:
             B, f_B = C, f_C
         return math.exp(A / 2)
 
-    def update_rating(self, team, op_mu, op_pi, outcome):
+    def update_rating(
+        self: Self, team: Team, op_mu: float, op_pi: float, outcome: int
+    ) -> None:
         """Update rating.
 
         Args:
@@ -195,7 +223,7 @@ class GlickoSystem:
         error = outcome - E
         team.update_error(error)
 
-    def rate(self, team1, team2, outcome):
+    def rate(self: Self, team1: Team, team2: Team, outcome: int) -> None:
         """Rate.
 
         Args:
@@ -215,32 +243,37 @@ class Team:
     """Team class."""
 
     def __init__(
-        self,
-        name,
-        league,
-        team_id,
-        win=0,
-        loss=0,
-        streak=0,
-        point=DEFAULT_POINT,
-        rd=DEFAULT_RD,
-        sigma=DEFAULT_SIGMA,
-        error=0,
-        error_square=0,
-        last_game_date=None,
-    ):
+        self: Self,
+        name: str,
+        league: str,
+        team_id: int,
+        win: int = 0,
+        loss: int = 0,
+        streak: int = 0,
+        point: float = DEFAULT_POINT,
+        rd: int = DEFAULT_RD,
+        sigma: float = DEFAULT_SIGMA,
+        error: float = 0,
+        error_square: float = 0,
+        last_game_date: datetime | None = None,
+    ) -> None:
         """Team init.
 
         Args:
-            name (str): Team name.
-            league (str): League of team.
-            win (int, optional): Number of win. Defaults to 0.
+            self (Self): self
+            name (str): Team name
+            league (str): League of team
+            team_id (int): ID of team
+            win (int, optional): Number of win. defaults to 0
             loss (int, optional): Number of loss. Defaults to 0.
             streak (int, optional): Number of streak. Defaults to 0.
-            point (_type_, optional): Number of point. Defaults to DEFAULT_POINT.
-            rd (int, optional): Rating deviation. Defaults to 350.
-            sigma (float, optional): Volatile. Defaults to 0.6.
-            last_game_date (datetime, optional): Date of last game. Defaults to None.
+            point (float, optional): Number of point. Defaults to DEFAULT_POINT.
+            rd (int, optional): Rating deviation. Defaults to DEFAULT_RD.
+            sigma (float, optional): Volatile. Defaults to DEFAULT_SIGMA.
+            error (float, optional): Error. Defaults to 0.
+            error_square (float, optional): Square of error. Defaults to 0.
+            last_game_date (DateTime | None, optional): Date of last game.
+                Defaults to None.
         """
         self.name = name
         self.league = league
@@ -256,8 +289,8 @@ class Team:
         self.last_game_date = last_game_date
 
     @property
-    def mu(self):
-        """Convert point to mu
+    def mu(self: Self) -> float:
+        """Convert point to mu.
 
         Returns:
             float: Converted mu
@@ -265,8 +298,8 @@ class Team:
         return (self.point - DEFAULT_POINT) / CONVERT_VALUE
 
     @property
-    def pi(self):
-        """Convert rating deviation to pi
+    def pi(self: Self) -> float:
+        """Convert rating deviation to pi.
 
         Returns:
             float: Converted pi
@@ -274,7 +307,7 @@ class Team:
         return self.rd / CONVERT_VALUE
 
     @property
-    def games(self):
+    def games(self: Self) -> int:
         """Number of games.
 
         Returns:
@@ -283,7 +316,7 @@ class Team:
         return self.win + self.loss
 
     @property
-    def winrate(self):
+    def winrate(self: Self) -> float:
         """Calculate winrate.
 
         Returns:
@@ -291,19 +324,19 @@ class Team:
         """
         return self.win / self.games if self.win > 0 else 0
 
-    def update(self, mu, pi, sigma):
-        """Update point, rd, sigma using mu, pi, sigma
+    def update(self: Self, mu: float, pi: float, sigma: float) -> None:
+        """Update point, rd, sigma using mu, pi, sigma.
 
         Args:
             mu (float): Converted point
-            pi (_type_): Converted rating deviation
-            sigma (_type_): Quantity volatile
+            pi (float): Converted rating deviation
+            sigma (float): Quantity volatile
         """
         self.point = CONVERT_VALUE * mu + DEFAULT_POINT
         self.rd = CONVERT_VALUE * pi
         self.sigma = sigma
 
-    def update_error(self, error):
+    def update_error(self: Self, error: float) -> None:
         """Update error.
 
         Args:
@@ -312,7 +345,7 @@ class Team:
         self.error += abs(error)
         self.error_square += error**2
 
-    def update_team_name(self, name):
+    def update_team_name(self: Self, name: str) -> None:
         """Update team name.
 
         Args:
@@ -320,7 +353,7 @@ class Team:
         """
         self.name = name
 
-    def update_league(self, league):
+    def update_league(self: Self, league: str) -> None:
         """Update league.
 
         Args:
@@ -328,8 +361,8 @@ class Team:
         """
         self.league = league
 
-    def update_streak(self, outcome):
-        """Update streak
+    def update_streak(self: Self, outcome: int) -> None:
+        """Update streak.
 
         Args:
             outcome (int): Outcome of match. 1 is win, 0 is loss.
@@ -340,28 +373,29 @@ class Team:
         else:
             self.streak = outcome
 
-    def update_match(self, outcome, game_date):
+    def update_match(self: Self, outcome: int, game_date: datetime) -> None:
         """Update match.
 
         Args:
             outcome (int): Outcome of match. 1 is win, 0 is loss.
-            game_date (datetime): Date of match.
+            game_date (DateTime): Date of match.
         """
         self.last_game_date = game_date
         if outcome == 1:
             self.win += 1
         else:
             self.loss += 1
+        self.update_streak(outcome)
 
-    def init_rd(self):
+    def init_rd(self: Self) -> None:
         """Init rating deviation."""
         self.rd = DEFAULT_RD
 
-    def init_sigma(self):
+    def init_sigma(self: Self) -> None:
         """Init sigma."""
         self.sigma = DEFAULT_SIGMA
 
-    def get_win_probability(self, glicko, op_team):
+    def get_win_probability(self: Self, glicko: GlickoSystem, op_team: Team) -> float:
         """Calculate win probability against op_team.
 
         Args:
@@ -373,7 +407,7 @@ class Team:
         """
         return glicko.calculate_E(self.mu, op_team.mu, op_team.pi)
 
-    def to_tuple(self):
+    def to_tuple(self: Self) -> tuple:
         """Convert to tuple.
 
         Returns:
@@ -397,7 +431,7 @@ class Team:
             self.last_game_date,
         )
 
-    def __str__(self):
+    def __str__(self: Self) -> str:
         """Convert to str.
 
         Returns:
@@ -406,8 +440,8 @@ class Team:
         return f"point: {self.point}, rd: {self.rd}, sigma: {self.sigma}"
 
 
-def get_team_id(teams_id, name):
-    """Get id of team from teams_id
+def get_team_id(teams_id: pd.DataFrame, name: str) -> int:
+    """Get id of team from teams_id.
 
     Args:
         teams_id (DataFrame): DataFrame of teams_id.
@@ -419,7 +453,7 @@ def get_team_id(teams_id, name):
     return teams_id.loc[teams_id["team"] == name, "team_id"].iloc[0]
 
 
-def is_proper_league(league):
+def is_proper_league(league: str) -> bool:
     """Check league is proper league.
 
     Args:
@@ -433,7 +467,9 @@ def is_proper_league(league):
     return True
 
 
-def proceed_rating(glicko, teams_id, teams, sg):
+def proceed_rating(
+    glicko: GlickoSystem, teams_id: pd.DataFrame, teams: dict, sg: pd.DataFrame
+) -> None:
     """Proceed rating.
 
     Args:
@@ -452,7 +488,7 @@ def proceed_rating(glicko, teams_id, teams, sg):
         teams[team2_id].update_match(1 - outcome, game_date)
 
 
-def get_rating(teams):
+def get_rating(teams: dict) -> pd.DataFrame:
     """Get rating.
 
     Args:
@@ -486,15 +522,24 @@ def get_rating(teams):
     return ratings
 
 
-def update_changes(origin, ratings):
+def update_changes(origin: pd.DataFrame, ratings: pd.DataFrame) -> pd.DataFrame:
+    """Update changes about standing and point.
+
+    Args:
+        origin (pd.DataFrame): Origin rating dataframe.
+        ratings (pd.DataFrame): New rating dataframe.
+
+    Returns:
+        pd.DataFrame: Updated rating dataframe.
+    """
     if len(origin) == 0:
         origin = pd.DataFrame(columns=ratings.columns)
 
     for row in ratings.itertuples():
-        df = origin.loc[origin["team_id"] == row.team_id]
-        if len(df) > 0:
-            standing_change = df.index[0] - row.Index
-            point_change = round(row.point - df["point"].iloc[0])
+        team_df = origin.loc[origin["team_id"] == row.team_id]
+        if len(team_df) > 0:
+            standing_change = team_df.index[0] - row.Index
+            point_change = round(row.point - team_df["point"].iloc[0])
 
             if standing_change == 0:
                 standing_change = "-"
@@ -515,7 +560,15 @@ def update_changes(origin, ratings):
     return ratings
 
 
-def parse_teams(file_path):
+def parse_teams(file_path: str) -> dict:
+    """Prase teams.
+
+    Args:
+        file_path (str): File path
+
+    Returns:
+        dict: Teams dictionary
+    """
     last_ratings = pd.read_csv(file_path, parse_dates=["last_game_date"])
 
     teams = {}
@@ -550,9 +603,19 @@ def parse_teams(file_path):
     return teams
 
 
-def rate_year_matches(teams_id, glicko, year: int):
+def rate_year_matches(teams_id: pd.DataFrame, glicko: GlickoSystem, year: int) -> dict:
+    """Rate matches of year.
+
+    Args:
+        teams_id (pd.DataFrame): DataFrame of teams_id.
+        glicko (GlickoSystem): GlickoSystem object.
+        year (int): Year
+
+    Returns:
+        dict: Teams dictionary
+    """
     last_year_file_path = f"./csv/glicko_rating/glicko_rating_{year - 1}.csv"
-    if year > 2011:
+    if year > START_YEAR:
         if os.path.isfile(last_year_file_path):
             teams = parse_teams(last_year_file_path)
         else:
@@ -577,10 +640,10 @@ def rate_year_matches(teams_id, glicko, year: int):
     for page in tqdm(tournaments["OverviewPage"]):
         sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
         league = sg["League"].iloc[0]
-        team_names = sg[["Team1", "Team2"]].unstack().unique()
+        team_names = pd.unique(sg[["Team1", "Team2"]].to_numpy().ravel())
 
         for name in team_names:
-            if name not in teams_id["team"].values:
+            if name not in teams_id["team"].to_numpy():
                 logging.error("%d year; %s tournament", year, page)
                 logging.error("%s not in teams id", name)
                 sys.exit(1)
@@ -606,8 +669,8 @@ def rate_year_matches(teams_id, glicko, year: int):
     return teams
 
 
-def main():
-    """Rating using glicko-2 rating"""
+def main() -> None:
+    """Rating using glicko-2 rating."""
     glicko = GlickoSystem()
 
     teams_id = pd.read_csv("./csv/teams_id.csv")
