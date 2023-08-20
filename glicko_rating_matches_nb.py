@@ -87,11 +87,11 @@ leagues = {
     "WCS": "World Championship",
 }
 
-tournaments = get_tournaments(where=f'T.Year=2023 and T.League="{leagues["LCK"]}"')
+tournaments = get_tournaments(where=f'T.Year=2023 and T.League="{leagues["WCS"]}"')
 tournaments
 
 # %%
-page = "LCK/2023 Season/Summer Playoffs"
+page = "LCK/2023 Season/Regional Finals"
 match_schedules = get_match_schedule(where=f'MS.OverviewPage="{page}"').sort_values(
     by=["DateTime UTC"], ignore_index=True
 )
@@ -121,9 +121,11 @@ for team_name in match_schedules[["Team1", "Team2"]].unstack().unique():
     lst_team.append(teams[team_id])
 
 # %%
-match_schedules = match_schedules.loc[match_schedules["Winner"].isna()].reset_index(
-    drop=True
-)
+match_schedules = match_schedules.loc[
+    match_schedules["Winner"].isna()
+    & ~(match_schedules["Team1"] == "TBD")
+    & ~(match_schedules["Team2"] == "TBD")
+].reset_index(drop=True)
 match_schedules.head()
 
 # %%
