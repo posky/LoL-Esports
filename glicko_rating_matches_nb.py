@@ -239,3 +239,4 @@ probs["Winprob2"] = probs[["2:3", "1:3", "0:3"]].sum(axis=1)
 probs
 
 # %%
+print()
