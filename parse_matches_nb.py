@@ -29,11 +29,11 @@ pd.set_option("display.max_columns", None)
 
 
 # %%
-def get_wiki_url(link):
+def get_wiki_url(link: str) -> str:
     return f'https://lol.fandom.com/wiki/{link.replace(" ", "_")}'
 
 
-def get_new_id(ids):
+def get_new_id(ids: pd.DataFrame) -> int:
     if "team_id" in ids.columns:
         id_list = sorted(ids["team_id"].unique())
     else:
@@ -49,15 +49,15 @@ def get_new_id(ids):
     return prev + 1
 
 
-def get_team_id(teams, name):
+def get_team_id(teams: pd.DataFrame, name: str) -> int:
     return teams.loc[teams["team"] == name, "team_id"].iloc[0]
 
 
-def get_player_id(players, name):
+def get_player_id(players: pd.DataFrame, name: str):
     return players.loc[players["player"] == name, "player_id"].iloc[0]
 
 
-def get_player_redirects_list(player_link):
+def get_player_redirects_list(player_link: str) -> list[str]:
     pr = get_player_redirects(where=f'PR.AllName="{player_link}"')
     if pr is None:
         return []
@@ -66,13 +66,13 @@ def get_player_redirects_list(player_link):
     return list(map(lambda x: x.lower(), lst))
 
 
-def get_players_id(players, player_link):
+def get_players_id(players: pd.DataFrame, player_link: str) -> pd.DataFrame:
     return players.loc[
         players["player"].str.lower().isin(get_player_redirects_list(player_link))
     ]
 
 
-def concat_teams(teams, name, new_id=-1):
+def concat_teams(teams: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
     if new_id == -1:
         new_id = get_new_id(teams)
     df = pd.concat(
@@ -82,7 +82,7 @@ def concat_teams(teams, name, new_id=-1):
     return df
 
 
-def concat_players(players, name, new_id=-1):
+def concat_players(players: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
     if new_id == -1:
         new_id = get_new_id(players)
     df = pd.concat(
@@ -92,11 +92,11 @@ def concat_players(players, name, new_id=-1):
     return df
 
 
-def split_string(string, delimiter=";;"):
+def split_string(string: str, delimiter: str = ";;") -> list[str]:
     return list(map(lambda x: x.strip(), string.split(delimiter)))
 
 
-def extract_players(row):
+def extract_players(row: pd.Series) -> list[str]:
     if pd.isna(row.RosterLinks):
         return []
 
