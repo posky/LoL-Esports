@@ -18,7 +18,6 @@ import logging
 import webbrowser
 from collections import Counter
 
-import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -30,10 +29,26 @@ pd.set_option("display.max_columns", None)
 
 # %%
 def get_wiki_url(link: str) -> str:
+    """Generate a URL for a Wikipedia page.
+
+    Args:
+        link (str): The name of the Wikipedia page.
+
+    Returns:
+        str: The URL for the corresponding Wikipedia page.
+    """
     return f'https://lol.fandom.com/wiki/{link.replace(" ", "_")}'
 
 
 def get_new_id(ids: pd.DataFrame) -> int:
+    """Generate a new ID for a team or player based on the existing IDs.
+
+    Args:
+        ids (pd.DataFrame): A DataFrame containing the existing IDs.
+
+    Returns:
+        int: The new ID to be assigned.
+    """
     if "team_id" in ids.columns:
         id_list = sorted(ids["team_id"].unique())
     else:
@@ -50,53 +65,129 @@ def get_new_id(ids: pd.DataFrame) -> int:
 
 
 def get_team_id(teams: pd.DataFrame, name: str) -> int:
+    """Returns an integer representing the team id associated with the given name.
+
+    Args:
+        teams (pd.DataFrame): A DataFrame containing team information.
+        name (str): The name of the team.
+
+    Returns:
+        int: The team id associated with the given name.
+    """
     return teams.loc[teams["team"] == name, "team_id"].iloc[0]
 
 
-def get_player_id(players: pd.DataFrame, name: str):
+def get_player_id(players: pd.DataFrame, name: str) -> int:
+    """Returns the player ID for the given player name.
+
+    Args:
+        players (pd.DataFrame): The DataFrame containing player information.
+        name (str): The name of the player to retrieve the ID for.
+
+    Returns:
+        int: The player ID corresponding to the given player name.
+    """
     return players.loc[players["player"] == name, "player_id"].iloc[0]
 
 
 def get_player_redirects_list(player_link: str) -> list[str]:
+    """Retrieves a list of player redirects based on a given player link.
+
+    Args:
+        player_link (str): The link of the player.
+
+    Returns:
+        list[str]: A list of player redirects.
+
+    Raises:
+        None
+    """
     pr = get_player_redirects(where=f'PR.AllName="{player_link}"')
     if pr is None:
         return []
     link = pr["OverviewPage"].iloc[0]
-    lst = get_player_redirects(where=f'PR.OverviewPage="{link}"')["AllName"].values
+    lst = get_player_redirects(where=f'PR.OverviewPage="{link}"')["AllName"].to_numpy()
     return list(map(lambda x: x.lower(), lst))
 
 
 def get_players_id(players: pd.DataFrame, player_link: str) -> pd.DataFrame:
+    """Get the players' IDs from the given DataFrame based on their player links.
+
+    Args:
+        players (pd.DataFrame): The DataFrame containing the players' data.
+        player_link (str): The link of the player.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the players' IDs.
+    """
     return players.loc[
         players["player"].str.lower().isin(get_player_redirects_list(player_link))
     ]
 
 
 def concat_teams(teams: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
+    """Concatenates a new team to the existing teams DataFrame.
+
+    Parameters:
+        teams (pd.DataFrame): The DataFrame containing the existing teams.
+        name (str): The name of the new team.
+        new_id (int, optional): The ID of the new team. Defaults to -1.
+
+    Returns:
+        pd.DataFrame: The updated DataFrame with the new team added.
+    """
     if new_id == -1:
         new_id = get_new_id(teams)
-    df = pd.concat(
+    new_df = pd.concat(
         [teams, pd.Series({"team": name, "team_id": new_id}).to_frame().T],
         ignore_index=True,
     )
-    return df
+    return new_df
 
 
 def concat_players(players: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
+    """Concatenates a new player to the existing players DataFrame.
+
+    Args:
+        players (pd.DataFrame): The DataFrame containing the existing players.
+        name (str): The name of the new player.
+        new_id (int, optional): The ID of the new player. Defaults to -1.
+
+    Returns:
+        pd.DataFrame: The updated DataFrame with the new player.
+    """
     if new_id == -1:
         new_id = get_new_id(players)
-    df = pd.concat(
+    new_df = pd.concat(
         [players, pd.Series({"player": name, "player_id": new_id}).to_frame().T],
         ignore_index=True,
     )
-    return df
+    return new_df
 
 
 def split_string(string: str, delimiter: str = ";;") -> list[str]:
+    """Split a string into a list of substrings based on a delimiter.
+
+    Parameters:
+        string (str): The string to be split.
+        delimiter (str, optional): The delimiter to split the string on.
+            Defaults to ";;".
+
+    Returns:
+        list[str]: A list of substrings resulting from the split operation.
+    """
     return list(map(lambda x: x.strip(), string.split(delimiter)))
 
 
 def extract_players(row: pd.Series) -> list[str]:
+    """Extracts the player names from the given row of a pandas Series object.
+
+    Parameters:
+        row (pd.Series): The row from which to extract the player names.
+
+    Returns:
+        list[str]: A list of unique player names extracted from the row.
+    """
     if pd.isna(row.RosterLinks):
         return []
 
@@ -146,8 +237,8 @@ for year in tqdm(range(2011, 2024)):
         tr = tournament_rosters.loc[tournament_rosters["OverviewPage"] == page]
         team_names = list(
             set(
-                list(sg[["Team1", "Team2"]].unstack().unique())
-                + list(tr["Team"].unique())
+                list(sg[["Team1", "Team2"]].to_numpy().ravel())
+                + list(tr["Team"])
             )
         )
         names = []
