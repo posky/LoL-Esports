@@ -128,7 +128,7 @@ def get_players_id(players: pd.DataFrame, player_link: str) -> pd.DataFrame:
 def concat_teams(teams: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
     """Concatenates a new team to the existing teams DataFrame.
 
-    Parameters:
+    Args:
         teams (pd.DataFrame): The DataFrame containing the existing teams.
         name (str): The name of the new team.
         new_id (int, optional): The ID of the new team. Defaults to -1.
@@ -168,7 +168,7 @@ def concat_players(players: pd.DataFrame, name: str, new_id: int = -1) -> pd.Dat
 def split_string(string: str, delimiter: str = ";;") -> list[str]:
     """Split a string into a list of substrings based on a delimiter.
 
-    Parameters:
+    Args:
         string (str): The string to be split.
         delimiter (str, optional): The delimiter to split the string on.
             Defaults to ";;".
@@ -182,7 +182,7 @@ def split_string(string: str, delimiter: str = ";;") -> list[str]:
 def extract_players(row: pd.Series) -> list[str]:
     """Extracts the player names from the given row of a pandas Series object.
 
-    Parameters:
+    Args:
         row (pd.Series): The row from which to extract the player names.
 
     Returns:
@@ -243,7 +243,7 @@ for year in tqdm(range(2011, 2024)):
         )
         names = []
         for name in team_names:
-            if name not in teams["team"].values:
+            if name not in teams["team"].to_numpy():
                 names.append(name)
         if len(names) > 0:
             names = sorted(names, key=lambda x: x.lower())
@@ -342,7 +342,7 @@ while not is_exception:
                 player_names += extract_players(row)
             player_names = list(set(player_names + list(sp["Link"].unique())))
             for name in player_names:
-                if name not in players["player"].values:
+                if name not in players["player"].to_numpy():
                     names.append(name)
             names = sorted(names)
             if len(names) > 0:
