@@ -81,6 +81,8 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
         ).reset_index(drop=True)
 
         file_path = f"./csv/tournaments/{year}_tournaments.csv"
+        if not os.path.isdir(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
         tournaments.to_csv(file_path, index=False)
         logging.debug("%d tournaments - %s", year, tournaments.shape)
 
