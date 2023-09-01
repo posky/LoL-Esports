@@ -14,57 +14,66 @@
 # ---
 
 # %%
-from itertools import permutations
-
 import pandas as pd
 
 from glicko_rating_matches import GlickoSystem, Team
-from lol_fandom import get_tournaments, get_match_schedule
+from lol_fandom import get_match_schedule, get_tournaments
 
 pd.set_option("display.max_columns", None)
 
 
 # %%
-def get_team_id(teams_id, team_name):
-    return teams_id.loc[teams_id["team"] == team_name, "team_id"].iloc[0]
+def get_team_id(teams_id: pd.DataFrame, team_name: str) -> int:
+    """Get the team ID for a given team name.
+
+    Args:
+        teams_id (pd.DataFrame): The DataFrame containing team IDs.
+        team_name (str): The name of the team.
+
+    Returns:
+        int: The team ID for the given team name.
+    """
+    team_id = teams_id.loc[teams_id["team"] == team_name, "team_id"].iloc[0]
+    return team_id
 
 
 # %%
+YEAR = 2023
 teams_id = pd.read_csv("./csv/teams_id.csv")
 ratings = pd.read_csv(
-    "./csv/glicko_rating/glicko_rating_2023.csv", parse_dates=["last_game_date"]
+    f"./csv/glicko_rating/glicko_rating_{YEAR}.csv", parse_dates=["last_game_date"]
 )
-scoreboard_games = pd.read_csv("./csv/scoreboard_games/2023_scoreboard_games.csv")
+scoreboard_games = pd.read_csv(f"./csv/scoreboard_games/{YEAR}_scoreboard_games.csv")
 teams_id.shape, ratings.shape, scoreboard_games.shape
 
 # %%
 scoreboard_games.loc[scoreboard_games["League"] == "LCK"].tail(6)
 
 # %%
-ratings.loc[(ratings["league"] == "LCK") & (ratings["last_game_date"].dt.year == 2023)]
+ratings.loc[(ratings["league"] == "LCK") & (ratings["last_game_date"].dt.year == YEAR)]
 
 # %%
 scoreboard_games.loc[scoreboard_games["League"] == "LPL"].tail(9)
 
 # %%
-ratings.loc[(ratings["league"] == "LPL") & (ratings["last_game_date"].dt.year == 2023)]
+ratings.loc[(ratings["league"] == "LPL") & (ratings["last_game_date"].dt.year == YEAR)]
 
 # %%
 scoreboard_games.loc[scoreboard_games["League"] == "LEC"].tail()
 
 # %%
-ratings.loc[(ratings["league"] == "LEC") & (ratings["last_game_date"].dt.year == 2023)]
+ratings.loc[(ratings["league"] == "LEC") & (ratings["last_game_date"].dt.year == YEAR)]
 
 # %%
 scoreboard_games.loc[scoreboard_games["League"] == "LCS"].tail()
 
 # %%
-ratings.loc[(ratings["league"] == "LCS") & (ratings["last_game_date"].dt.year == 2023)]
+ratings.loc[(ratings["league"] == "LCS") & (ratings["last_game_date"].dt.year == YEAR)]
 
 # %%
 ratings.loc[
     (ratings["league"].isin(["LCK", "LPL", "LEC", "LCS"]))
-    & (ratings["last_game_date"].dt.year == 2023)
+    & (ratings["last_game_date"].dt.year == YEAR)
 ]
 
 # %%
@@ -72,7 +81,7 @@ leagues = ["LCK", "LPL", "LEC", "LCS"]
 for league in leagues:
     print(league)
     lst = ratings.loc[
-        (ratings["league"] == league) & (ratings["last_game_date"].dt.year == 2023),
+        (ratings["league"] == league) & (ratings["last_game_date"].dt.year == YEAR),
         "team",
     ].unique()
     print(", ".join(map(lambda x: f"'{x}'", lst)))
@@ -87,7 +96,7 @@ leagues = {
     "WCS": "World Championship",
 }
 
-tournaments = get_tournaments(where=f'T.Year=2023 and T.League="{leagues["WCS"]}"')
+tournaments = get_tournaments(where=f'T.Year={YEAR} and T.League="{leagues["WCS"]}"')
 tournaments
 
 # %%
@@ -99,7 +108,7 @@ match_schedules = get_match_schedule(where=f'MS.OverviewPage="{page}"').sort_val
 
 teams = {}
 lst_team = []
-for team_name in match_schedules[["Team1", "Team2"]].unstack().unique():
+for team_name in pd.unique(match_schedules[["Team1", "Team2"]].to_numpy().ravel()):
     try:
         team_id = get_team_id(teams_id, team_name)
     except Exception as e:
@@ -237,6 +246,3 @@ for row in matches_bo5.itertuples():
 probs["Winprob1"] = probs[["3:0", "3:1", "3:2"]].sum(axis=1)
 probs["Winprob2"] = probs[["2:3", "1:3", "0:3"]].sum(axis=1)
 probs
-
-# %%
-print()
