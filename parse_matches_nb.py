@@ -236,10 +236,7 @@ for year in tqdm(range(2011, 2024)):
         sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
         tr = tournament_rosters.loc[tournament_rosters["OverviewPage"] == page]
         team_names = list(
-            set(
-                list(sg[["Team1", "Team2"]].to_numpy().ravel())
-                + list(tr["Team"])
-            )
+            set(list(sg[["Team1", "Team2"]].to_numpy().ravel()) + list(tr["Team"]))
         )
         names = []
         for name in team_names:
