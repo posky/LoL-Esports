@@ -178,5 +178,227 @@ def get_scoreboard_games(where: str = "") -> pl.DataFrame:
     )
 
 
-if __name__ == "__main__":
-    pass
+def get_scoreboard_players(where: str = "") -> pl.DataFrame:
+    """Returns a dataframe containing scoreboard player data.
+
+    Parameters:
+        where (str): A string representing the condition to filter the data.
+            (default: "")
+
+    Returns:
+        pl.DataFrame: A pandas-like dataframe containing the scoreboard player data.
+
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="Tournaments=T, ScoreboardPlayers=SP",
+        join_on="T.OverviewPage=SP.OverviewPage",
+        fields=(
+            "SP.OverviewPage, SP.Name, SP.Link, SP.Champion, SP.Kills, SP.Deaths,"
+            " SP.Assists, SP.SummonerSpells, SP.Gold, SP.CS, SP.DamageToChampions,"
+            " SP.VisionScore, SP.Items, SP.Trinket, SP.KeystoneMastery,"
+            " SP.KeystoneRune, SP.PrimaryTree, SP.SecondaryTree, SP.Runes,"
+            " SP.TeamKills, SP.TeamGold, SP.Team, SP.TeamVs, SP.Time, SP.PlayerWin,"
+            " SP.DateTime_UTC, SP.DST, SP.Tournament, SP.Role, SP.Role_Number,"
+            " SP.IngameRole, SP.Side, SP.UniqueLine, SP.UniqueLineVs, SP.UniqueRole,"
+            " SP.UniqueRoleVs, SP.GameId, SP.MatchId, SP.GameTeamId, SP.GameRoleId,"
+            " SP.GameRoleIdVs, SP.StatsPage"
+        ),
+        where=where,
+    )
+
+    scoreboard_players = from_response(response)
+
+    int_types = [
+        "Kills",
+        "Deaths",
+        "Assists",
+        "Gold",
+        "CS",
+        "DamageToChampions",
+        "VisionScore",
+        "TeamKills",
+        "TeamGold",
+        "Role Number",
+        "Side",
+    ]
+    datetime_type = ["DateTime UTC"]
+
+    scoreboard_players = scoreboard_players.with_columns(
+        pl.col(int_types).cast(pl.Int32),
+    )
+    return scoreboard_players.with_columns(
+        pl.col(datetime_type).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
+    )
+
+
+def get_tournament_rosters(where: str = "") -> pl.DataFrame:
+    """Fetches tournament rosters based on the provided filter.
+
+    Args:
+        where (str, optional): A filter to apply to the tournament rosters.
+        Defaults to "".
+
+    Returns:
+        pl.DataFrame: A DataFrame containing the tournament rosters.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="Tournaments=T, TournamentRosters=TR",
+        join_on="T.OverviewPage=TR.OverviewPage",
+        fields=(
+            "TR.Team, TR.OverviewPage, TR.Region, TR.RosterLinks, TR.Roles, TR.Flags,"
+            " TR.Footnotes, TR.IsUsed, TR.Tournament, TR.Short, TR.IsComplete,"
+            " TR.PageAndTeam, TR.UniqueLine"
+        ),
+        where=where,
+    )
+
+    return from_response(response)
+
+
+def get_player_redirects(where: str = "") -> pl.DataFrame:
+    """Retrieves player redirects from the API based on the specified condition.
+
+    Args:
+        where (str, optional): The condition to filter the redirects. Defaults to "".
+
+    Returns:
+        pl.DataFrame: The player redirects data.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="PlayerRedirects=PR",
+        fields="PR.AllName, PR.OverviewPage, PR.ID",
+        where=where,
+    )
+
+    return from_response(response)
+
+
+def get_teams(where: str = "") -> pl.DataFrame:
+    """Retrieves teams from the API based on the given query parameters.
+
+    Args:
+        where (str, optional): The query parameter to filter the teams. Defaults to "".
+
+    Returns:
+        pl.DataFrame: A DataFrame containing the retrieved teams.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="Teams=T",
+        fields=(
+            "T.Name, T.OverviewPage, T.Short, T.Location, T.TeamLocation, T.Region,"
+            " T.OrganizationPage, T.Image, T.Twitter, T.Youtube, T.Facebook,"
+            " T.Instagram, T.Discord, T.Snapchat, T.Vk, T.Subreddit, T.Website,"
+            " T.RosterPhoto, T.IsDisbanded, T.RenamedTo, T.IsLowercase"
+        ),
+        where=where,
+    )
+
+    return from_response(response)
+
+
+def get_tournament_results(where: str = "") -> pl.DataFrame:
+    """Retrieves tournament results based on the specified query.
+
+    Args:
+        where (str, optional): A string specifying the query filter. Defaults to "".
+
+    Returns:
+        pl.DataFrame: A pandas DataFrame containing the tournament results.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="TournamentResults=TR",
+        fields=(
+            "TR.Event, TR.Tier, TR.Date, TR.RosterPage, TR.Place, TR.ForceNewPlace,"
+            " TR.Place_Number, TR.Qualified, TR.Prize, TR.Prize_USD, TR.Prize_Euro,"
+            " TR.PrizeUnit, TR.Prize_Markup, TR.PrizeOther, TR.Phase, TR.Team,"
+            " TR.IsAchievement, TR.LastResult, TR.LastTeam, TR.LastOpponent_Markup,"
+            " TR.GroupName, TR.LastOutcome, TR.PageAndTeam, TR.OverviewPage,"
+            " TR.UniqueLine"
+        ),
+        where=where,
+    )
+
+    return from_response(response)
+
+
+def get_team_redirects(where: str = "") -> pl.DataFrame:
+    """Retrieves team redirects from the API based on the specified filter.
+
+    Args:
+        where (str): A filter to apply to the query. Defaults to an empty string.
+
+    Returns:
+        pl.DataFrame: A polars DataFrame containing the retrieved team redirects.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="TeamRedirects=TR",
+        fields="TR.AllName, TR.OtherName, TR.UniqueLine",
+        where=where,
+    )
+
+    return from_response(response)
+
+
+def get_match_schedule(where: str = "") -> pl.DataFrame:
+    """Retrieves the match schedule data from the API.
+
+    Args:
+        where (str, optional): The condition to filter the match schedule data.
+        Defaults to "".
+
+    Returns:
+        pl.DataFrame: The match schedule data as a Pandas DataFrame.
+    """
+    delay_between_query()
+
+    response = SITE.api(
+        "cargoquery",
+        limit="max",
+        tables="MatchSchedule=MS",
+        fields=(
+            "MS.Team1, MS.Team2, MS.Team1Final, MS.Team2Final, MS.Winner,"
+            " MS.Team1Points, MS.Team2Points, MS.Team1PointsTB, MS.Team2PointsTB,"
+            " MS.Team1Score, MS.Team2Score, MS.Team1Poster, MS.Team2Poster,"
+            " MS.Team1Advantage, MS.Team2Advantage, MS.FF, MS.IsNullified, MS.Player1,"
+            " MS.Player2, MS.MatchDay, MS.DateTime_UTC, MS.HasTime, MS.DST,"
+            " MS.IsFlexibleStart, MS.IsReschedulable, MS.OverrideAllowPredictions,"
+            " MS.OverrideDisallowPredictions, MS.IsTiebreaker, MS.OverviewPage,"
+            " MS.ShownName, MS.ShownRound, MS.BestOf, MS.Round, MS.Phase,"
+            " MS.N_MatchInPage, MS.Tab, MS.N_MatchInTab, MS.N_TabInPage, MS.N_Page,"
+            " MS.Patch, MS.PatchPage, MS.Hotfix, MS.DisabledChampions,"
+            " MS.PatchFootnote, MS.InitialN_MatchInTab, MS.InitialPageAndTab,"
+            " MS.GroupName, MS.Stream, MS.StreamDisplay, MS.Venue, MS.CastersPBP,"
+            " MS.CastersColor, MS.Casters, MS.MVP, MS.MVPPoints, MS.VodInterview,"
+            " MS.VodHighlights, MS.InterviewWith, MS.Recap, MS.Reddit, MS.QQ,"
+            " MS.Wanplus, MS.WanplusId, MS.PageAndTeam1, MS.PageAndTeam2,"
+            " MS.Team1Footnote, MS.Team2Footnote, MS.Footnote, MS.UniqueMatch,"
+            " MS.MatchId"
+        ),
+        where=where,
+    )
+
+    return from_response(response)
