@@ -24,56 +24,97 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 
+
 [tool.ruff]
 line-length = 88
 select = [
-    "E",   # pycodestyle
-    "F",   # pyflakes
-    "ANN", # flake8-annotations
-    "B",   # flake8-bugbear
-    "ICN", # flake8-import-conventions
-    "G",   # flake8-logging-format
-    "PIE", # flake8-pie
-    "PYI", # flake8-pyi
-    "SIM", # flake8-simplify
-    "ARG", # flake8-unused-arguments
-    "PD",  # pandas-vet
-    "PL",  # Pyling
-    "NPY", # NumPy-specific rules
-    "RUF", # Ruff-specific rules
-    "UP",  # pyupgrade
-    "D",   # pydocstyle
-    "I",   # isort
+    "F",     # pyflakes
+    "E",     # pycodestyle
+    "W",     # pycodestyle
+    "I",     # isort
+    "N",     # pep8-naming
+    "D",     # pydocstyle
+    "UP",    # pyupgrade
+    "ANN",   # flake8-annotations
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit
+    "BLE",   # flake8-blind-except
+    "FBT",   # flake8-boolean-trap
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "COM",   # flake8-commas
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "EM",    # flake8-errmsg
+    "FA",    # flake8-future-annotations
+    "ISC",   # flake8-implicit-str-concat
+    "ICN",   # flake8-import-conventions
+    "G",     # flake8-logging-format
+    "PIE",   # flake8-pie
+    "PYI",   # flake8-pyi
+    "Q",     # flake8-quotes
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slots
+    "SIM",   # flake8-simplify
+    "TID",   # flake8-tidy-imports
+    "TCH",   # flake8-type-checking
+    "INT",   # flake8-gettext
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib
+    "PD",    # pandas-vet
+    "PL",    # Pylint
+    "TRY",   # tryceratops
+    "FLY",   # flynt
+    "NPY",   # NumPy-specific rules
+    "PERF",  # Perflint
+    "FURB",  # refurb
+    "RUF",   # Ruff-specific rules
 ]
 ignore = []
 include = ["*.py", "*.pyi", "**/pyproject.toml", "*.ipynb"]
 fix = true
 fixable = [
-    "E",
     "F",
+    "E",
+    "W",
+    "I",
+    "D",
+    "UP",
     "ANN",
     "B",
+    "COM",
+    "C4",
+    "EM",
+    "ISC",
     "ICN",
     "G",
     "PIE",
     "PYI",
+    "Q",
+    "RSE",
+    "RET",
     "SIM",
+    "TID",
+    "TCH",
+    "PTH",
     "PD",
     "PL",
+    "TRY",
+    "FLY",
     "NPY",
+    "PERF",
+    "FURB",
     "RUF",
-    "UP",
-    "D",
-    "I",
 ]
 unfixable = [
     "F401",
     "F601",
     "F602",
     "F841",
-    "PIE794",
     "D203",
-    "D212",
+    "D213",
     "D215",
     "D400",
     "D406",
@@ -81,6 +122,7 @@ unfixable = [
     "D408",
     "D409",
     "D413",
+    "PIE794",
 ]
 
 [tool.ruff.pydocstyle]
@@ -97,6 +139,9 @@ section-order = [
     "first-party",
     "local-folder",
 ]
+
+[tool.ruff.flake8-annotations]
+mypy-init-return = true
 
 [tool.black]
 line-length = 88
