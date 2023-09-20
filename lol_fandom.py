@@ -7,9 +7,12 @@ import pandas as pd
 
 SITE = mwclient.Site("lol.fandom.com", path="/")
 
-DEFAULT_DELAY = 1
 
-last_query = time.time()
+class Config:
+    """Config class."""
+
+    DEFAULT_DELAY = 1
+    last_query = time.time()
 
 
 def set_default_delay(delay: int) -> None:
@@ -22,9 +25,7 @@ def set_default_delay(delay: int) -> None:
     Returns:
         None
     """
-    global DEFAULT_DELAY
-
-    DEFAULT_DELAY = delay
+    Config.DEFAULT_DELAY = delay
 
 
 def delay_between_query() -> None:
@@ -46,14 +47,12 @@ def delay_between_query() -> None:
     Returns:
         None
     """
-    global last_query
-
-    delay = DEFAULT_DELAY - (time.time() - last_query)
+    delay = Config.DEFAULT_DELAY - (time.time() - Config.last_query)
 
     if delay > 0:
         time.sleep(delay)
 
-    last_query = time.time()
+    Config.last_query = time.time()
 
 
 def from_response(response: dict) -> pd.DataFrame:
@@ -396,10 +395,11 @@ def get_tournament_results(where: str = "") -> pd.DataFrame:
 
 
 def get_team_redirects(where: str = "") -> pd.DataFrame:
-    """Retrieves the team redirects from the database based on the given filter criteria.
+    """Retrieves the team redirects from the database based on the given filter.
 
     Args:
-        where (str, optional): The filter criteria to apply to the query. Defaults to "".
+        where (str, optional): The filter criteria to apply to the query.
+        Defaults to "".
 
     Returns:
         pd.DataFrame or None: The DataFrame containing the team redirects if found,
