@@ -60,7 +60,13 @@ def from_response(response: dict) -> pl.DataFrame:
     Returns:
         pl.DataFrame: The generated polars DataFrame.
     """
-    return pl.DataFrame([row["title"] for row in response["cargoquery"]])
+    if len(response["cargoquery"]) > 0:
+        columns = response["cargoquery"][0]["title"].keys()
+        return pl.DataFrame(
+            [row["title"] for row in response["cargoquery"]],
+            schema={key: pl.Utf8 for key in columns},
+        )
+    return pl.DataFrame()
 
 
 def get_leagues(where: str = "") -> pl.DataFrame:
@@ -111,10 +117,12 @@ def get_tournaments(where: str = "") -> pl.DataFrame:
 
     tournaments = from_response(response)
 
-    return tournaments.with_columns(
-        pl.col("DateStart").str.strptime(pl.Datetime, "%Y-%m-%d"),
-        pl.col("Date").str.strptime(pl.Datetime, "%Y-%m-%d"),
-    )
+    if tournaments.shape[0] > 0:
+        datetime_cols = ["DateStart", "Date"]
+        tournaments.with_columns(
+            pl.col(datetime_cols).str.strptime(pl.Datetime, "%Y-%m-%d"),
+        )
+    return tournaments
 
 
 def get_scoreboard_games(where: str = "") -> pl.DataFrame:
