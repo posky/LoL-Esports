@@ -1,12 +1,11 @@
-import os
-import requests
 import logging
+import os
 from datetime import datetime
 
 import pandas as pd
-from ratelimit import limits, sleep_and_retry
+import requests
 from furl import furl
-
+from ratelimit import limits, sleep_and_retry
 
 DIR_PATH = "./csv/solo_rank"
 
@@ -14,10 +13,10 @@ DIR_PATH = "./csv/solo_rank"
 class RiotAPI:
     HOST_URL = "https://{}.api.riotgames.com"
 
-    def __init__(self, api_key=None, platform="kr", region="asia"):
+    def __init__(self, api_key=None, platform="kr", region="asia") -> None:
         logging.info("RiotAPI created.")
         if api_key is None:
-            with open("./riot_api_key.txt", "r") as f:
+            with open("./riot_api_key.txt") as f:
                 api_key = f.read().strip()
         self.headers = {"X-Riot-Token": api_key}
         self.platform_host = self.HOST_URL.format(platform)
@@ -30,7 +29,8 @@ class RiotAPI:
     def get_data(self, url):
         response = requests.get(url, headers=self.headers)
         if response.status_code != 200:
-            raise Exception(f"API response: {response.status_code}")
+            msg = f"API response: {response.status_code}"
+            raise Exception(msg)
         return response.json()
 
     def get_data_by_platform(self, url_contents):
@@ -46,7 +46,7 @@ class RiotAPI:
         return self.get_data(url.url)
 
     class Summoner:
-        def __init__(self, riot_api):
+        def __init__(self, riot_api) -> None:
             self.url = "/lol/summoner/v4/summoners/"
             self.riot_api = riot_api
 
@@ -66,7 +66,7 @@ class RiotAPI:
             return self.riot_api.get_data_by_platform(url_contents)
 
     class Match:
-        def __init__(self, riot_api):
+        def __init__(self, riot_api) -> None:
             self.url = "/lol/match/v5/matches/"
             self.riot_api = riot_api
 
@@ -86,7 +86,9 @@ class RiotAPI:
             return self.riot_api.get_data_by_region(url_contents)
 
 
-def get_dataframe_from_csv(file_name, columns=[]):
+def get_dataframe_from_csv(file_name, columns=None):
+    if columns is None:
+        columns = []
     file_path = os.path.join(DIR_PATH, file_name)
     if os.path.isfile(file_path):
         df = pd.read_csv(file_path)
@@ -241,19 +243,19 @@ def get_latest_matches_by_name(riot_api, name):
         challenges = pd.concat([challenges, pd.DataFrame(_challenges)])
         perks = pd.concat([perks, pd.DataFrame(_perks)])
 
-    metadata.reset_index(drop=True, inplace=True)
-    info.reset_index(drop=True, inplace=True)
-    teams.reset_index(drop=True, inplace=True)
-    participants.reset_index(drop=True, inplace=True)
-    challenges.reset_index(drop=True, inplace=True)
-    perks.reset_index(drop=True, inplace=True)
+    metadata = metadata.reset_index(drop=True)
+    info = info.reset_index(drop=True)
+    teams = teams.reset_index(drop=True)
+    participants = participants.reset_index(drop=True)
+    challenges = challenges.reset_index(drop=True)
+    perks = perks.reset_index(drop=True)
 
     return summoner, metadata, info, teams, participants, challenges, perks
 
 
 def save_to_csv(df, file_name, concat=False, index=False):
     file_path = os.path.join(DIR_PATH, file_name)
-    if concat == True and os.path.isfile(file_path):
+    if concat is True and os.path.isfile(file_path):
         original = pd.read_csv(file_path)
     else:
         original = pd.DataFrame()
@@ -298,7 +300,7 @@ def select_options():
         date_now = datetime.now()
         merged = merged.loc[
             merged["gameCreation"].apply(
-                lambda x: (date_now - datetime.fromtimestamp(x / 1000)).days <= days
+                lambda x: (date_now - datetime.fromtimestamp(x / 1000)).days <= days,
             )
         ]
 
@@ -311,12 +313,21 @@ def get_stats(matches_data):
     assert matches_data.shape[0] > 0
 
     matches_data["dpm"] = matches_data["totalDamageDealtToChampions"].divide(
-        matches_data["gameDuration"] / 60
+        matches_data["gameDuration"] / 60,
     )
 
     grouped = matches_data.groupby(["player", "teamPosition", "championName"])
     stats = pd.DataFrame(
-        columns=["games", "win", "loss", "winrate", "kills", "deaths", "assists", "kda"]
+        columns=[
+            "games",
+            "win",
+            "loss",
+            "winrate",
+            "kills",
+            "deaths",
+            "assists",
+            "kda",
+        ],
     )
 
     stats["games"] = grouped["championId"].count()
