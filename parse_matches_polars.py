@@ -1,0 +1,108 @@
+"""Parse lolesports matches."""
+import datetime
+import logging
+from pathlib import Path
+
+import polars as pl
+from tqdm import tqdm
+
+from lol_fandom_pl import get_leagues, get_scoreboard_games, get_tournaments
+
+
+def get_updated_contents(df: pl.DataFrame, path: Path) -> pl.DataFrame:
+    origin = pl.read_parquet(path) if path.is_file() else pl.DataFrame(schema=df.schema)
+
+    return df.filter(~pl.col("GameId").is_in(origin.select(pl.col("GameId"))))
+
+
+def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
+    """Parses tournaments data from the start year to the current or specified end year.
+
+    Args:
+        start (int, optional): The start year of the tournaments to parse.
+            Defaults to 2011.
+        end (int, optional): The end year of the tournaments to parse.
+            Defaults to the current year.
+
+    Returns:
+        None: This function does not return anything.
+    """
+    if end is None:
+        end = datetime.datetime.now(
+            tz=datetime.timezone(datetime.timedelta(hours=9)),
+        ).year
+
+    logging.info("=========== Tournaments ===========")
+    leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
+    for year in tqdm(range(start, end + 1)):
+        tournaments = pl.DataFrame()
+        for league in tqdm(leagues["League Short"]):
+            tournament = get_tournaments(
+                where=f'L.League_Short="{league}" and T.Year={year}',
+            )
+            tournaments = (
+                pl.concat([tournaments, tournament])
+                if tournament.shape[0] > 0
+                else tournaments
+            )
+        tournaments = tournaments.sort(by=["Year", "DateStart", "Date"])
+
+        file_path = Path(f"./csv/tournaments/{year}_tournaments.parquet")
+        if not file_path.parent.is_dir():
+            Path.mkdir(file_path, parents=True)
+        tournaments.write_parquet(file_path)
+
+
+def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
+    if end is None:
+        end = datetime.datetime.now(tz=datetime.UTC).year
+
+    logging.info("=========== Scoreboard Games ===========")
+    leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
+    for year in tqdm(range(start, end + 1)):
+        tournaments = pl.read_parquet(f"./csv/tournaments/{year}_tournaments.parquet")
+        logging.debug("%d - tournament %s", year, tournaments.shape)
+        scoreboard_games = pl.DataFrame()
+        for page in tqdm(tournaments.select(pl.col("OverviewPage"))):
+            sg = get_scoreboard_games(where=f'T.OverviewPage="{page}"')
+            if sg.shape[0] == 0:
+                logging.debug("\t%s - drop", page)
+                tournaments = tournaments.filter(pl.col("OverviewPage") != page)
+                continue
+            league = tournaments.select(pl.col("League") == page).to_series()[0]
+            sg = sg.with_column(League=league)
+            logging.debug("%s - %d", page, sg.shape[0])
+            scoreboard_games = pl.concat([scoreboard_games, sg])
+        scoreboard_games = scoreboard_games.sort(by="DateTime UTC")
+
+        file_path = Path(f"./csv/scoreboard_games/{year}_scoreboard_games.parquet")
+        updated_df = get_updated_contents(scoreboard_games, file_path)
+        logging.info(
+            updated_df.select(
+                pl.col(
+                    [
+                        "OverviewPage",
+                        "Team1",
+                        "Team2",
+                        "WinTeam",
+                        "DateTime UTC",
+                        "GameId",
+                    ],
+                ),
+            ),
+        )
+        scoreboard_games.write_parquet(file_path)
+        logging.debug("%d scoreboard_games %s", year, scoreboard_games.shape)
+        tournaments.write_parquet(f"./csv/tournaments/{year}_tournaments.parquet")
+        logging.debug("%d tournaments %s", year, tournaments.shape)
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO)
+
+    parse_tournaments(start=2023)
+    parse_scoreboard_games(start=2011)
+
+
+if __name__ == "__main__":
+    main()
