@@ -10,9 +10,20 @@ from lol_fandom_pl import get_leagues, get_scoreboard_games, get_tournaments
 
 
 def get_updated_contents(df: pl.DataFrame, path: Path) -> pl.DataFrame:
+    """Return updated contents.
+
+    Args:
+        df (pl.DataFrame): The input DataFrame.
+        path (Path): The path to the parquet file.
+
+    Returns:
+        pl.DataFrame: The updated DataFrame.
+    """
     origin = pl.read_parquet(path) if path.is_file() else pl.DataFrame(schema=df.schema)
 
-    return df.filter(~pl.col("GameId").is_in(origin.select(pl.col("GameId"))))
+    return df.filter(
+        ~pl.col("GameId").is_in(origin.select(pl.col("GameId")).to_series()),
+    )
 
 
 def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
@@ -32,11 +43,14 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
             tz=datetime.timezone(datetime.timedelta(hours=9)),
         ).year
 
-    logging.info("=========== Tournaments ===========")
     leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
-    for year in tqdm(range(start, end + 1)):
+    for year in tqdm(range(start, end + 1), desc="Tournaments"):
         tournaments = pl.DataFrame()
-        for league in tqdm(leagues["League Short"]):
+        for (league,) in tqdm(
+            leagues.select(pl.col("League Short")).rows(),
+            desc="Leagues",
+        ):
+            logging.debug("league: %s", league)
             tournament = get_tournaments(
                 where=f'L.League_Short="{league}" and T.Year={year}',
             )
@@ -45,7 +59,12 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
                 if tournament.shape[0] > 0
                 else tournaments
             )
-        tournaments = tournaments.sort(by=["Year", "DateStart", "Date"])
+            logging.debug("tournaments columns: %s", tournaments.columns)
+        tournaments = (
+            tournaments.sort(by=["Year", "DateStart", "Date"])
+            if tournaments.shape[0] > 0
+            else tournaments
+        )
 
         file_path = Path(f"./csv/tournaments/{year}_tournaments.parquet")
         if not file_path.parent.is_dir():
@@ -54,23 +73,35 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
 
 
 def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
+    """Parses the scoreboard games for a given range of years.
+
+    Args:
+        start (int, optional): The starting year to parse. Defaults to 2011.
+        end (int, optional): The ending year to parse. If not provided,
+            the current year will be used.
+
+    Returns:
+        None
+    """
     if end is None:
         end = datetime.datetime.now(tz=datetime.UTC).year
 
-    logging.info("=========== Scoreboard Games ===========")
-    leagues = get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
-    for year in tqdm(range(start, end + 1)):
+    for year in tqdm(range(start, end + 1), desc="Year"):
         tournaments = pl.read_parquet(f"./csv/tournaments/{year}_tournaments.parquet")
         logging.debug("%d - tournament %s", year, tournaments.shape)
         scoreboard_games = pl.DataFrame()
-        for page in tqdm(tournaments.select(pl.col("OverviewPage"))):
+        for (page,) in tqdm(
+            tournaments.select(pl.col("OverviewPage")).rows(),
+            desc="Scoreboard Games",
+        ):
+            logging.debug("page is: %s", page)
             sg = get_scoreboard_games(where=f'T.OverviewPage="{page}"')
             if sg.shape[0] == 0:
                 logging.debug("\t%s - drop", page)
                 tournaments = tournaments.filter(pl.col("OverviewPage") != page)
                 continue
             league = tournaments.select(pl.col("League") == page).to_series()[0]
-            sg = sg.with_column(League=league)
+            sg = sg.with_columns(League=league)
             logging.debug("%s - %d", page, sg.shape[0])
             scoreboard_games = pl.concat([scoreboard_games, sg])
         scoreboard_games = scoreboard_games.sort(by="DateTime UTC")
@@ -100,7 +131,7 @@ def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
-    parse_tournaments(start=2023)
+    parse_tournaments(start=2011)
     parse_scoreboard_games(start=2011)
 
 
