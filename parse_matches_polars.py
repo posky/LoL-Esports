@@ -68,7 +68,7 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
 
         file_path = Path(f"./csv/tournaments/{year}_tournaments.parquet")
         if not file_path.parent.is_dir():
-            Path.mkdir(file_path, parents=True)
+            Path.mkdir(file_path.parent, parents=True)
         tournaments.write_parquet(file_path)
 
 
@@ -122,6 +122,8 @@ def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
                 ),
             ),
         )
+        if not file_path.parent.is_dir():
+            Path.mkdir(file_path.parent, parents=True)
         scoreboard_games.write_parquet(file_path)
         logging.debug("%d scoreboard_games %s", year, scoreboard_games.shape)
         tournaments.write_parquet(f"./csv/tournaments/{year}_tournaments.parquet")
