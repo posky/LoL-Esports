@@ -24,7 +24,6 @@ from tqdm import tqdm
 from lol_fandom import get_leagues, get_player_redirects
 
 pd.set_option("display.max_columns", None)
-pd.set_option("display.max_columns", None)
 
 
 # %%
@@ -57,10 +56,10 @@ def get_new_id(ids: pd.DataFrame) -> int:
     if len(id_list) == 0:
         return 1
     prev = id_list[0]
-    for id in id_list[1:]:
-        if prev + 1 != id:
+    for cur_id in id_list[1:]:
+        if prev + 1 != cur_id:
             return prev + 1
-        prev = id
+        prev = cur_id
     return prev + 1
 
 
@@ -107,7 +106,7 @@ def get_player_redirects_list(player_link: str) -> list[str]:
         return []
     link = pr["OverviewPage"].iloc[0]
     lst = get_player_redirects(where=f'PR.OverviewPage="{link}"')["AllName"].to_numpy()
-    return list(map(lambda x: x.lower(), lst))
+    return [x.lower() for x in lst]
 
 
 def get_players_id(players: pd.DataFrame, player_link: str) -> pd.DataFrame:
@@ -138,11 +137,10 @@ def concat_teams(teams: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFra
     """
     if new_id == -1:
         new_id = get_new_id(teams)
-    new_df = pd.concat(
+    return pd.concat(
         [teams, pd.Series({"team": name, "team_id": new_id}).to_frame().T],
         ignore_index=True,
     )
-    return new_df
 
 
 def concat_players(players: pd.DataFrame, name: str, new_id: int = -1) -> pd.DataFrame:
@@ -158,11 +156,10 @@ def concat_players(players: pd.DataFrame, name: str, new_id: int = -1) -> pd.Dat
     """
     if new_id == -1:
         new_id = get_new_id(players)
-    new_df = pd.concat(
+    return pd.concat(
         [players, pd.Series({"player": name, "player_id": new_id}).to_frame().T],
         ignore_index=True,
     )
-    return new_df
 
 
 def split_string(string: str, delimiter: str = ";;") -> list[str]:
@@ -176,7 +173,7 @@ def split_string(string: str, delimiter: str = ";;") -> list[str]:
     Returns:
         list[str]: A list of substrings resulting from the split operation.
     """
-    return list(map(lambda x: x.strip(), string.split(delimiter)))
+    return [x.strip() for x in string.split(delimiter)]
 
 
 def extract_players(row: pd.Series) -> list[str]:
@@ -223,10 +220,10 @@ names = []
 for year in tqdm(range(2011, 2024)):
     tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
     scoreboard_games = pd.read_csv(
-        f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+        f"./csv/scoreboard_games/{year}_scoreboard_games.csv",
     )
     tournament_rosters = pd.read_csv(
-        f"./csv/tournament_rosters/{year}_tournament_rosters.csv"
+        f"./csv/tournament_rosters/{year}_tournament_rosters.csv",
     )
     logging.info("%d - tournament %d", year, tournaments.shape[0])
     logging.info("%d - scoreboard games %d", year, scoreboard_games.shape[0])
@@ -236,7 +233,7 @@ for year in tqdm(range(2011, 2024)):
         sg = scoreboard_games.loc[scoreboard_games["OverviewPage"] == page]
         tr = tournament_rosters.loc[tournament_rosters["OverviewPage"] == page]
         team_names = list(
-            set(list(sg[["Team1", "Team2"]].to_numpy().ravel()) + list(tr["Team"]))
+            set(list(sg[["Team1", "Team2"]].to_numpy().ravel()) + list(tr["Team"])),
         )
         names = []
         for name in team_names:
@@ -258,7 +255,7 @@ if len(names) == 0:
     logging.info("Completed")
 
 # %%
-teams.loc[teams["team"].str.contains("point", case=False)]
+teams.loc[teams["team"].str.contains("west point", case=False)]
 
 # %%
 if len(names) > 0:
@@ -273,7 +270,7 @@ teams
 teams["lower"] = teams["team"].str.lower()
 teams["lower"] = teams["lower"].str.replace(" ", "")
 teams["lower"] = teams["lower"].str.replace("-", "")
-lst = sorted(list(teams[["lower", "team_id"]].itertuples(index=False)))
+lst = sorted(teams[["lower", "team_id"]].itertuples(index=False))
 
 is_complete = True
 prev = lst[0]
@@ -310,13 +307,13 @@ while not is_exception:
     for year in tqdm(range(2011, 2024)):
         tournaments = pd.read_csv(f"./csv/tournaments/{year}_tournaments.csv")
         scoreboard_games = pd.read_csv(
-            f"./csv/scoreboard_games/{year}_scoreboard_games.csv"
+            f"./csv/scoreboard_games/{year}_scoreboard_games.csv",
         )
         scoreboard_players = pd.read_csv(
-            f"./csv/scoreboard_players/{year}_scoreboard_players.csv"
+            f"./csv/scoreboard_players/{year}_scoreboard_players.csv",
         )
         tournament_rosters = pd.read_csv(
-            f"./csv/tournament_rosters/{year}_tournament_rosters.csv"
+            f"./csv/tournament_rosters/{year}_tournament_rosters.csv",
         )
         logging.info("%d", year)
         logging.info(
@@ -387,7 +384,7 @@ while not is_exception:
 
     while True:
         players["lower"] = players["player"].str.lower()
-        lst = sorted(list(players[["lower", "player_id"]].itertuples(index=False)))
+        lst = sorted(players[["lower", "player_id"]].itertuples(index=False))
 
         is_complete = True
         prev = lst[0]
@@ -408,7 +405,7 @@ while not is_exception:
                 break
             else:
                 players.loc[players["lower"] == prev[0], "player_id"] = min(
-                    players.loc[players["lower"] == prev[0], "player_id"]
+                    players.loc[players["lower"] == prev[0], "player_id"],
                 )
                 print("after correction")
                 print(players.loc[players["lower"] == prev[0]])
