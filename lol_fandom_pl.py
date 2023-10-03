@@ -157,33 +157,37 @@ def get_scoreboard_games(where: str = "") -> pl.DataFrame:
 
     scoreboard_games = from_response(response)
 
-    int_types = ["Team1Score", "Team2Score", "Winner"]
-    float_types = [
-        "Gamelength Number",
-        "Team1Dragons",
-        "Team2Dragons",
-        "Team1Barons",
-        "Team2Barons",
-        "Team1Towers",
-        "Team2Towers",
-        "Team1Gold",
-        "Team2Gold",
-        "Team1Kills",
-        "Team2Kills",
-        "Team1RiftHeralds",
-        "Team2RiftHeralds",
-        "Team1Inhibitors",
-        "Team2Inhibitors",
-    ]
-    datetime_type = ["DateTime UTC"]
+    if scoreboard_games.shape[0] > 0:
+        int_types = ["Team1Score", "Team2Score", "Winner"]
+        float_types = [
+            "Gamelength Number",
+            "Team1Dragons",
+            "Team2Dragons",
+            "Team1Barons",
+            "Team2Barons",
+            "Team1Towers",
+            "Team2Towers",
+            "Team1Gold",
+            "Team2Gold",
+            "Team1Kills",
+            "Team2Kills",
+            "Team1RiftHeralds",
+            "Team2RiftHeralds",
+            "Team1Inhibitors",
+            "Team2Inhibitors",
+        ]
+        datetime_type = ["DateTime UTC"]
 
-    scoreboard_games = scoreboard_games.with_columns([pl.col(int_types).cast(pl.Int32)])
-    scoreboard_games = scoreboard_games.with_columns(
-        pl.col(float_types).cast(pl.Float32),
-    )
-    return scoreboard_games.with_columns(
-        pl.col(datetime_type).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
-    )
+        scoreboard_games = scoreboard_games.with_columns(
+            pl.col(int_types).cast(pl.Int32),
+        )
+        scoreboard_games = scoreboard_games.with_columns(
+            pl.col(float_types).cast(pl.Float32),
+        )
+        scoreboard_games = scoreboard_games.with_columns(
+            pl.col(datetime_type).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
+        )
+    return scoreboard_games
 
 
 def get_scoreboard_players(where: str = "") -> pl.DataFrame:
@@ -220,27 +224,29 @@ def get_scoreboard_players(where: str = "") -> pl.DataFrame:
 
     scoreboard_players = from_response(response)
 
-    int_types = [
-        "Kills",
-        "Deaths",
-        "Assists",
-        "Gold",
-        "CS",
-        "DamageToChampions",
-        "VisionScore",
-        "TeamKills",
-        "TeamGold",
-        "Role Number",
-        "Side",
-    ]
-    datetime_type = ["DateTime UTC"]
+    if scoreboard_players.shape[0] > 0:
+        int_types = [
+            "Kills",
+            "Deaths",
+            "Assists",
+            "Gold",
+            "CS",
+            "DamageToChampions",
+            "VisionScore",
+            "TeamKills",
+            "TeamGold",
+            "Role Number",
+            "Side",
+        ]
+        datetime_type = ["DateTime UTC"]
 
-    scoreboard_players = scoreboard_players.with_columns(
-        pl.col(int_types).cast(pl.Int32),
-    )
-    return scoreboard_players.with_columns(
-        pl.col(datetime_type).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
-    )
+        scoreboard_players = scoreboard_players.with_columns(
+            [pl.col(int_types).cast(pl.Int32)],
+        )
+        scoreboard_players = scoreboard_players.with_columns(
+            pl.col(datetime_type).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
+        )
+    return scoreboard_players
 
 
 def get_tournament_rosters(where: str = "") -> pl.DataFrame:
