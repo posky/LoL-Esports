@@ -77,13 +77,13 @@ class Leaguepedia:
         if any(table not in self.TABLES for table in tables):
             msg = "Invalid table name."
             raise ValueError(msg)
-        tables = ", ".join({*tables, "tournaments"})
+        tables = ", ".join(self.TABLES[table] for table in {*tables, "tournaments"})
         self.delay_between_query()
 
         response = self.api(
             "cargoquery",
             limit="max",
-            tables=self.TABLES["tournaments"],
+            tables=tables,
             join_on=join_on,
             fields=(
                 "T.Name, T.OverviewPage, T.DateStart, T.Date, T.DateStartFuzzy,"
