@@ -243,3 +243,74 @@ class Leaguepedia:
                 pl.col(datetime_cols).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
             )
         return scoreboard_games
+
+    def get_scoreboard_players(
+        self: Leaguepedia,
+        *,
+        tables: list[str] | None = None,
+        join_on: str = "",
+        where: str = "",
+    ) -> pl.DataFrame:
+        """Get the scoreboard players from the specified tables.
+
+        Args:
+            self (Leaguepedia): The Leaguepedia object.
+            tables (list[str] | None): A list of table names to query.
+                If None, all tables will be queried.
+            join_on (str): The join condition for the tables.
+            where (str): The WHERE condition for the query.
+
+        Returns:
+            pl.DataFrame: The scoreboard players data.
+        """
+        if tables is None:
+            tables = []
+        if any(table not in self.TABLES for table in tables):
+            msg = "Invalid table name."
+            raise ValueError(msg)
+        tables = ", ".join(
+            self.TABLES[table] for table in {*tables, "scoreboard_players"}
+        )
+        self.delay_between_query()
+
+        response = self.api(
+            "cargoquery",
+            limit="max",
+            tables=tables,
+            join_on=join_on,
+            fields=(
+                "SP.OverviewPage, SP.Name, SP.Link, SP.Champion, SP.Kills, SP.Deaths,"
+                " SP.Assists, SP.SummonerSpells, SP.Gold, SP.CS, SP.DamageToChampions,"
+                " SP.VisionScore, SP.Items, SP.Trinket, SP.KeystoneMastery,"
+                " SP.KeystoneRune, SP.PrimaryTree, SP.SecondaryTree, SP.Runes,"
+                " SP.TeamKills, SP.TeamGold, SP.Team, SP.TeamVs, SP.Time, SP.PlayerWin,"
+                " SP.DateTime_UTC, SP.DST, SP.Tournament, SP.Role, SP.Role_Number,"
+                " SP.IngameRole, SP.Side, SP.UniqueLine, SP.UniqueLineVs,"
+                " SP.UniqueRole, SP.UniqueRoleVs, SP.GameId, SP.MatchId, SP.GameTeamId,"
+                " SP.GameRoleId, SP.GameRoleIdVs, SP.StatsPage"
+            ),
+            where=where,
+        )
+
+        scoreboard_players = self.__from_response(response)
+        if not scoreboard_players.is_empty():
+            int_cols = [
+                "Kills",
+                "Deaths",
+                "Assists",
+                "Gold",
+                "CS",
+                "DamageToChampions",
+                "VisionScore",
+                "TeamKills",
+                "TeamGold",
+                "Role Number",
+                "Side",
+            ]
+            datetime_cols = ["Time", "DateTime UTC"]
+            scoreboard_players = scoreboard_players.with_columns(
+                pl.col(int_cols).cast(pl.Int32),
+                pl.col(datetime_cols).str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S"),
+            )
+
+        return scoreboard_players
