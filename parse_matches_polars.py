@@ -98,9 +98,70 @@ def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
         )
 
 
+def parse_scoreboard_players(start: int = 2011, end: int | None = None) -> None:
+    """Parses the scoreboard players for a given range of years.
+
+    Args:
+        start (int): The starting year of the range. Default is 2011.
+        end (int | None): The ending year of the range. If None, the current year is used.
+            Default is None.
+
+    Returns:
+        None
+    """
+    end = end or datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
+
+    leaguepedia = Leaguepedia()
+    for year in tqdm(range(start, end + 1), desc="Years", position=0):
+        tournaments = pl.read_parquet(
+            f"./parquet/tournaments/{year}_tournaments.parquet",
+        )
+        scoreboard_games = pl.read_parquet(
+            f"./parquet/scoreboard_games/{year}_scoreboard_games.parquet",
+        )
+        scoreboard_players = pl.DataFrame()
+        for (page,) in tqdm(
+            tournaments.select(pl.col("OverviewPage")).rows(),
+            desc="Tournaments",
+            position=1,
+            leave=False,
+        ):
+            sg = scoreboard_games.filter(pl.col("OverviewPage") == page)
+            teams = (
+                sg.melt(id_vars="OverviewPage", value_vars=["Team1", "Team2"])
+                .select(pl.col("value"))
+                .unique()
+            )
+            for (team,) in teams.rows():
+                sp = leaguepedia.get_scoreboard_players(
+                    tables=["tournaments"],
+                    join_on="T.OverviewPage=SP.OverviewPage",
+                    where=f'T.OverviewPage="{page}" and SP.Team="{team}"',
+                )
+                if not sp.is_empty():
+                    scoreboard_players = pl.concat([scoreboard_players, sp])
+
+            if (
+                sg.shape[0] * 10
+                != scoreboard_players.filter(pl.col("OverviewPage") == page).shape[0]
+            ):
+                target = scoreboard_players.filter(pl.col("OverviewPage") == page)
+                print(target)
+                msg = "scoreboard games: {sg.shape[0]}, players: {df.shape[0]}"
+                raise AssertionError(msg)
+        scoreboard_players = scoreboard_players.sort(
+            by=["OverviewPage", "GameId", "Team", "Role Number"],
+        )
+        write_parquet(
+            scoreboard_players,
+            f"./parquet/scoreboard_players/{year}_scoreboard_players.parquet",
+        )
+
+
 def main() -> None:
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
+    parse_scoreboard_players(start=2023)
 
 
 if __name__ == "__main__":
