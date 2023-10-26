@@ -37,23 +37,20 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
     """
     end = end or datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
     leaguepedia = Leaguepedia()
-    leagues = leaguepedia.get_leagues(
-        where='L.Level="Primary" and L.IsOfficial="Yes"',
-    )
+    leagues = leaguepedia.get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
     for year in tqdm(range(start, end + 1), desc="Years"):
-        tournaments = pl.concat(
-            [
-                leaguepedia.get_tournaments(
-                    tables=["leagues"],
-                    join_on="L.League=T.League",
-                    where=f'L.League="{league}" and T.Year={year}',
-                )
-                for (league,) in tqdm(
-                    leagues.select(pl.col("League")).rows(),
-                    desc="Leagues",
-                )
-            ],
-        )
+        tournaments = pl.DataFrame()
+        for (league,) in tqdm(
+            leagues.select(pl.col("League")).rows(),
+            desc="Leagues",
+        ):
+            tournament = leaguepedia.get_tournaments(
+                tables=["leagues"],
+                join_on="L.League=T.League",
+                where=f'L.League="{league}" and T.Year={year}',
+            )
+            if not tournament.is_empty():
+                tournaments = pl.concat([tournaments, tournament])
         write_parquet(tournaments, f"./parquet/tournaments/{year}_tournaments.parquet")
 
 
