@@ -167,6 +167,7 @@ credentials.json
 token.json
 
 csv
+parquet
 .vscode
 sheet_id.txt
 *_nb.ipynb
