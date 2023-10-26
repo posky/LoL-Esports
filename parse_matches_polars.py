@@ -9,6 +9,21 @@ from tqdm import tqdm
 from lol_fandom_pl import Leaguepedia
 
 
+def write_parquet(df: pl.DataFrame, path: str) -> None:
+    """Writes a pandas DataFrame to a Parquet file.
+
+    Args:
+        df (pl.DataFrame): The DataFrame to be written.
+        path (str): The path to the Parquet file.
+
+    Returns:
+        None
+    """
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    df.write_parquet(file_path)
+
+
 def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
     """Parses tournaments.
 
@@ -20,28 +35,26 @@ def parse_tournaments(start: int = 2011, end: int | None = None) -> None:
     Returns:
         None
     """
-    if end is None:
-        end = datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
-
+    end = end or datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
     leaguepedia = Leaguepedia()
-    leagues = leaguepedia.get_leagues(where='L.Level="Primary" and L.IsOfficial="Yes"')
+    leagues = leaguepedia.get_leagues(
+        where='L.Level="Primary" and L.IsOfficial="Yes"',
+    )
     for year in tqdm(range(start, end + 1), desc="Years"):
-        tournaments = pl.DataFrame()
-        for (league,) in tqdm(leagues.select(pl.col("League")).rows(), desc="Leagues"):
-            tournament = leaguepedia.get_tournaments(
-                tables=["leagues"],
-                join_on="L.League=T.League",
-                where=f'L.League="{league}" and T.Year={year}',
-            )
-            tournaments = (
-                pl.concat([tournaments, tournament])
-                if not tournament.is_empty()
-                else tournaments
-            )
-        file_path = Path(f"./parquet/tournaments/{year}_tournaments.parquet")
-        if not file_path.parent.is_dir():
-            file_path.parent.mkdir(parents=True)
-        tournaments.write_parquet(file_path)
+        tournaments = pl.concat(
+            [
+                leaguepedia.get_tournaments(
+                    tables=["leagues"],
+                    join_on="L.League=T.League",
+                    where=f'L.League="{league}" and T.Year={year}',
+                )
+                for (league,) in tqdm(
+                    leagues.select(pl.col("League")).rows(),
+                    desc="Leagues",
+                )
+            ],
+        )
+        write_parquet(tournaments, f"./parquet/tournaments/{year}_tournaments.parquet")
 
 
 def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
@@ -56,9 +69,7 @@ def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
     Returns:
         None
     """
-    if end is None:
-        end = datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
-
+    end = end or datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
     leaguepedia = Leaguepedia()
     for year in tqdm(range(start, end + 1), desc="Years"):
         tournaments = pl.read_parquet(
@@ -80,11 +91,11 @@ def parse_scoreboard_games(start: int = 2011, end: int | None = None) -> None:
             else:
                 scoreboard_games = pl.concat([scoreboard_games, sg])
         tournaments = tournaments.filter(~pl.col("OverviewPage").is_in(exclude_pages))
-        tournaments.write_parquet(f"./parquet/tournaments/{year}_tournaments.parquet")
-        file_path = Path(f"./parquet/scoreboard_games/{year}_scoreboard_games.parquet")
-        if not file_path.parent.is_dir():
-            file_path.parent.mkdir(parents=True)
-        scoreboard_games.write_parquet(file_path)
+        write_parquet(tournaments, f"./parquet/tournaments/{year}_tournaments.parquet")
+        write_parquet(
+            scoreboard_games,
+            f"./parquet/scoreboard_games/{year}_scoreboard_games.parquet",
+        )
 
 
 def main() -> None:
