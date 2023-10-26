@@ -311,7 +311,7 @@ def main() -> None:
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
-    # parse_tournament_rosters(start=2023)
+    parse_tournament_rosters(start=2023)
     # parse_matches_schedule(start=2023)
 
 
