@@ -87,20 +87,20 @@ class Leaguepedia:
         Returns:
             DataFrame: A pandas DataFrame containing the retrieved leagues.
         """
-        if tables is None:
-            tables = []
+        tables = tables or []
         if any(table not in self.TABLES for table in tables):
             msg = "Invalid table name."
             raise ValueError(msg)
         tables = ", ".join(self.TABLES[table] for table in {*tables, "leagues"})
         self.delay_between_query()
 
+        fields = "L.League, L.League_Short, L.Region, L.Level, L.IsOfficial"
         response = self.api(
             "cargoquery",
             limit="max",
             tables=tables,
             join_on=join_on,
-            fields="L.League, L.League_Short, L.Region, L.Level, L.IsOfficial",
+            fields=fields,
             where=where,
         )
 
@@ -127,29 +127,29 @@ class Leaguepedia:
         Raises:
             ValueError: If an invalid table name is provided in the 'tables' parameter.
         """
-        if tables is None:
-            tables = []
+        tables = tables or []
         if any(table not in self.TABLES for table in tables):
             msg = "Invalid table name."
             raise ValueError(msg)
         tables = ", ".join(self.TABLES[table] for table in {*tables, "tournaments"})
         self.delay_between_query()
 
+        fields = (
+            "T.Name, T.OverviewPage, T.DateStart, T.Date, T.DateStartFuzzy,"
+            " T.League, T.Region, T.Prizepool, T.Currency, T.Country,"
+            " T.ClosestTimezone, T.Rulebook, T.EventType, T.Links, T.Sponsors,"
+            " T.Organizer, T.Organizers, T.StandardName, T.StandardName_Redirect,"
+            " T.BasePage, T.Split, T.SplitNumber, T.SplitMainPage,"
+            " T.TournamentLevel, T.IsQualifier, T.IsPlayoffs, T.IsOfficial, T.Year,"
+            " T.LeagueIconKey, T.AlternativeNames, T.ScrapeLink, T.Tags,"
+            " T.SuppressTopSchedule"
+        )
         response = self.api(
             "cargoquery",
             limit="max",
             tables=tables,
             join_on=join_on,
-            fields=(
-                "T.Name, T.OverviewPage, T.DateStart, T.Date, T.DateStartFuzzy,"
-                " T.League, T.Region, T.Prizepool, T.Currency, T.Country,"
-                " T.ClosestTimezone, T.Rulebook, T.EventType, T.Links, T.Sponsors,"
-                " T.Organizer, T.Organizers, T.StandardName, T.StandardName_Redirect,"
-                " T.BasePage, T.Split, T.SplitNumber, T.SplitMainPage,"
-                " T.TournamentLevel, T.IsQualifier, T.IsPlayoffs, T.IsOfficial, T.Year,"
-                " T.LeagueIconKey, T.AlternativeNames, T.ScrapeLink, T.Tags,"
-                " T.SuppressTopSchedule"
-            ),
+            fields=fields,
             where=where,
         )
 
@@ -184,8 +184,7 @@ class Leaguepedia:
         Raises:
             ValueError: If an invalid table name is provided.
         """
-        if tables is None:
-            tables = []
+        tables = tables or []
         if any(table not in self.TABLES for table in tables):
             msg = "Invalid table name."
             raise ValueError(msg)
@@ -194,25 +193,26 @@ class Leaguepedia:
         )
         self.delay_between_query()
 
+        fields = (
+            "SG.OverviewPage, SG.Tournament, SG.Team1, SG.Team2, SG.WinTeam,"
+            " SG.LossTeam, SG.DateTime_UTC, SG.DST, SG.Team1Score, SG.Team2Score,"
+            " SG.Winner, SG.Gamelength, SG.Gamelength_Number, SG.Team1Bans,"
+            " SG.Team2Bans, SG.Team1Picks, SG.Team2Picks, SG.Team1Players,"
+            " SG.Team2Players, SG.Team1Dragons, SG.Team2Dragons, SG.Team1Barons,"
+            " SG.Team2Barons, SG.Team1Towers, SG.Team2Towers, SG.Team1Gold,"
+            " SG.Team2Gold, SG.Team1Kills, SG.Team2Kills, SG.Team1RiftHeralds,"
+            " SG.Team2RiftHeralds, SG.Team1Inhibitors, SG.Team2Inhibitors,"
+            " SG.Patch, SG.PatchSort, SG.MatchHistory, SG.VOD, SG.N_Page,"
+            " SG.N_MatchInTab, SG.N_MatchInPage, SG.N_GameInMatch, SG.Gamename,"
+            " SG.UniqueLine, SG.GameId, SG.MatchId, SG.RiotPlatformGameId,"
+            " SG.RiotPlatformId, SG.RiotGameId, SG.RiotHash, SG.RiotVersion"
+        )
         response = self.api(
             "cargoquery",
             limit="max",
             tables=tables,
             join_on=join_on,
-            fields=(
-                "SG.OverviewPage, SG.Tournament, SG.Team1, SG.Team2, SG.WinTeam,"
-                " SG.LossTeam, SG.DateTime_UTC, SG.DST, SG.Team1Score, SG.Team2Score,"
-                " SG.Winner, SG.Gamelength, SG.Gamelength_Number, SG.Team1Bans,"
-                " SG.Team2Bans, SG.Team1Picks, SG.Team2Picks, SG.Team1Players,"
-                " SG.Team2Players, SG.Team1Dragons, SG.Team2Dragons, SG.Team1Barons,"
-                " SG.Team2Barons, SG.Team1Towers, SG.Team2Towers, SG.Team1Gold,"
-                " SG.Team2Gold, SG.Team1Kills, SG.Team2Kills, SG.Team1RiftHeralds,"
-                " SG.Team2RiftHeralds, SG.Team1Inhibitors, SG.Team2Inhibitors,"
-                " SG.Patch, SG.PatchSort, SG.MatchHistory, SG.VOD, SG.N_Page,"
-                " SG.N_MatchInTab, SG.N_MatchInPage, SG.N_GameInMatch, SG.Gamename,"
-                " SG.UniqueLine, SG.GameId, SG.MatchId, SG.RiotPlatformGameId,"
-                " SG.RiotPlatformId, SG.RiotGameId, SG.RiotHash, SG.RiotVersion"
-            ),
+            fields=fields,
             where=where,
         )
 
@@ -273,22 +273,23 @@ class Leaguepedia:
         )
         self.delay_between_query()
 
+        fields = (
+            "SP.OverviewPage, SP.Name, SP.Link, SP.Champion, SP.Kills, SP.Deaths,"
+            " SP.Assists, SP.SummonerSpells, SP.Gold, SP.CS, SP.DamageToChampions,"
+            " SP.VisionScore, SP.Items, SP.Trinket, SP.KeystoneMastery,"
+            " SP.KeystoneRune, SP.PrimaryTree, SP.SecondaryTree, SP.Runes,"
+            " SP.TeamKills, SP.TeamGold, SP.Team, SP.TeamVs, SP.Time, SP.PlayerWin,"
+            " SP.DateTime_UTC, SP.DST, SP.Tournament, SP.Role, SP.Role_Number,"
+            " SP.IngameRole, SP.Side, SP.UniqueLine, SP.UniqueLineVs,"
+            " SP.UniqueRole, SP.UniqueRoleVs, SP.GameId, SP.MatchId, SP.GameTeamId,"
+            " SP.GameRoleId, SP.GameRoleIdVs, SP.StatsPage"
+        )
         response = self.api(
             "cargoquery",
             limit="max",
             tables=tables,
             join_on=join_on,
-            fields=(
-                "SP.OverviewPage, SP.Name, SP.Link, SP.Champion, SP.Kills, SP.Deaths,"
-                " SP.Assists, SP.SummonerSpells, SP.Gold, SP.CS, SP.DamageToChampions,"
-                " SP.VisionScore, SP.Items, SP.Trinket, SP.KeystoneMastery,"
-                " SP.KeystoneRune, SP.PrimaryTree, SP.SecondaryTree, SP.Runes,"
-                " SP.TeamKills, SP.TeamGold, SP.Team, SP.TeamVs, SP.Time, SP.PlayerWin,"
-                " SP.DateTime_UTC, SP.DST, SP.Tournament, SP.Role, SP.Role_Number,"
-                " SP.IngameRole, SP.Side, SP.UniqueLine, SP.UniqueLineVs,"
-                " SP.UniqueRole, SP.UniqueRoleVs, SP.GameId, SP.MatchId, SP.GameTeamId,"
-                " SP.GameRoleId, SP.GameRoleIdVs, SP.StatsPage"
-            ),
+            fields=fields,
             where=where,
         )
 
