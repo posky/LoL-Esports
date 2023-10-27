@@ -60,6 +60,12 @@ class Leaguepedia:
         cls.last_query = time.time()
 
     @classmethod
+    def __check_tables(cls: Leaguepedia, tables: list[str]) -> None:
+        if any(table not in cls.TABLES for table in tables):
+            msg = "Invalid table name."
+            raise ValueError(msg)
+
+    @classmethod
     def __from_response(cls: Leaguepedia, response: dict) -> pl.DataFrame:
         if len(response["cargoquery"]) > 0:
             columns = response["cargoquery"][0]["title"].keys()
@@ -88,9 +94,7 @@ class Leaguepedia:
             DataFrame: A pandas DataFrame containing the retrieved leagues.
         """
         tables = tables or []
-        if any(table not in self.TABLES for table in tables):
-            msg = "Invalid table name."
-            raise ValueError(msg)
+        self.__check_tables(tables)
         tables = ", ".join(self.TABLES[table] for table in {*tables, "leagues"})
         self.delay_between_query()
 
@@ -128,9 +132,7 @@ class Leaguepedia:
             ValueError: If an invalid table name is provided in the 'tables' parameter.
         """
         tables = tables or []
-        if any(table not in self.TABLES for table in tables):
-            msg = "Invalid table name."
-            raise ValueError(msg)
+        self.__check_tables(tables)
         tables = ", ".join(self.TABLES[table] for table in {*tables, "tournaments"})
         self.delay_between_query()
 
@@ -185,9 +187,7 @@ class Leaguepedia:
             ValueError: If an invalid table name is provided.
         """
         tables = tables or []
-        if any(table not in self.TABLES for table in tables):
-            msg = "Invalid table name."
-            raise ValueError(msg)
+        self.__check_tables(tables)
         tables = ", ".join(
             self.TABLES[table] for table in {*tables, "scoreboard_games"}
         )
@@ -263,11 +263,8 @@ class Leaguepedia:
         Returns:
             pl.DataFrame: The scoreboard players data.
         """
-        if tables is None:
-            tables = []
-        if any(table not in self.TABLES for table in tables):
-            msg = "Invalid table name."
-            raise ValueError(msg)
+        tables = tables or []
+        self.__check_tables(tables)
         tables = ", ".join(
             self.TABLES[table] for table in {*tables, "scoreboard_players"}
         )
