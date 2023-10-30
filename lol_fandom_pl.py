@@ -23,7 +23,7 @@ class Leaguepedia:
         "tournament_rosters": "TournamentRosters=TR",
         "player_redirects": "PlayerRedirects=PR",
         "teams": "Teams=TS",
-        "tournament_results": "TournamentResults=TR",
+        "tournament_results": "TournamentResults=TRS",
     }
 
     def __init__(self: Leaguepedia) -> None:
@@ -312,3 +312,33 @@ class Leaguepedia:
             )
 
         return scoreboard_players
+
+    def get_tournament_rosters(
+        self: Leaguepedia,
+        *,
+        tables: list[str] | None = None,
+        join_on: str = "",
+        where: str = "",
+    ) -> pl.DataFrame:
+        tables = tables or []
+        self.__check_tables(tables)
+        tables = ", ".join(
+            self.TABLES[table] for table in {*tables, "tournament_rosters"}
+        )
+        self.delay_between_query()
+
+        fields = (
+            "TR.Team, TR.OverviewPage, TR.Region, TR.RosterLinks, TR.Roles, TR.Flags,"
+            " TR.Footnotes, TR.IsUsed, TR.Tournament, TR.Short, TR.IsComplete,"
+            " TR.PageAndTeam, TR.UniqueLine"
+        )
+        response = self.api(
+            "cargoquery",
+            limit="max",
+            tables=tables,
+            join_on=join_on,
+            fields=fields,
+            where=where,
+        )
+
+        return self.__from_response(response)
