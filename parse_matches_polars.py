@@ -1,4 +1,5 @@
 """Parse lolesports matches."""
+
 import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -155,10 +156,39 @@ def parse_scoreboard_players(start: int = 2011, end: int | None = None) -> None:
         )
 
 
+def parse_tournament_rosters(start: int = 2011, end: int | None = None) -> None:
+    end = end or datetime.datetime.now(tz=ZoneInfo("Asia/Seoul")).year
+
+    leaguepedia = Leaguepedia()
+    for year in tqdm(range(start, end + 1), desc="Years", position=0):
+        tournaments = pl.read_parquet(
+            f"./parquet/tournaments/{year}_tournaments.parquet",
+        )
+        tournament_rosters = pl.DataFrame()
+        for (page,) in tqdm(
+            tournaments.select(pl.col("OverviewPage")).rows(),
+            desc="Tournaments",
+            position=1,
+            leave=False,
+        ):
+            tr = leaguepedia.get_tournament_rosters(
+                tables=["tournaments"],
+                join_on="T.OverviewPage=TR.OverviewPage",
+                where=f'T.OverviewPage="{page}"',
+            )
+            if not tr.is_empty():
+                tournament_rosters = pl.concat([tournament_rosters, tr])
+        write_parquet(
+            tournament_rosters,
+            f"./parquet/tournament_rosters/{year}_tournament_rosters.parquet",
+        )
+
+
 def main() -> None:
     parse_tournaments(start=2023)
     parse_scoreboard_games(start=2023)
     parse_scoreboard_players(start=2023)
+    parse_tournament_rosters(start=2023)
 
 
 if __name__ == "__main__":
